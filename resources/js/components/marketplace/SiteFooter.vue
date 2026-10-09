@@ -6,6 +6,7 @@ import { useAuthUser } from '@/composables/useAuthUser';
 import { dashboard, home, login, register } from '@/routes';
 import { show as categoryShow } from '@/routes/categories';
 import { index as giveawaysIndex } from '@/routes/giveaways';
+import { privacy, terms } from '@/routes/legal';
 import { create, index } from '@/routes/listings';
 import { index as notificationsIndex } from '@/routes/notifications';
 import { edit as profileEdit } from '@/routes/profile';
@@ -136,7 +137,15 @@ const linkClass = 'hover:text-foreground hover:underline underline-offset-4';
                     >© {{ new Date().getFullYear() }}
                     {{ page.props.name }}</span
                 >
-                <span
+                <span class="flex flex-wrap gap-x-4 gap-y-1">
+                    <Link :href="terms()" :class="linkClass"
+                        >Điều khoản sử dụng</Link
+                    >
+                    <Link :href="privacy()" :class="linkClass"
+                        >Chính sách quyền riêng tư</Link
+                    >
+                </span>
+                <span class="basis-full"
                     >Giá hiển thị bằng đồng (đ). Thời gian theo giờ Việt
                     Nam.</span
                 >

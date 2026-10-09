@@ -6,8 +6,11 @@ use App\Http\Controllers\GiveawayController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ListingBidController;
 use App\Http\Controllers\ListingController;
+use App\Http\Controllers\ListingDraftController;
 use App\Http\Controllers\ListingInteractionController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SavedSearchController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\UnlockRequestController;
 use App\Http\Controllers\UserProfileController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +27,12 @@ Route::get('listings/{listing}/bids', [ListingBidController::class, 'index'])->w
 Route::get('giveaways', [GiveawayController::class, 'index'])->name('giveaways.index');
 Route::get('giveaways/{giveaway}', [GiveawayController::class, 'show'])->whereNumber('giveaway')->name('giveaways.show');
 
+Route::get('terms', [SiteController::class, 'terms'])->name('legal.terms');
+Route::get('privacy', [SiteController::class, 'privacy'])->name('legal.privacy');
+// Fetched by crawlers: no session, no cookies.
+Route::get('sitemap.xml', [SiteController::class, 'sitemap'])->withoutMiddleware('web')->name('sitemap');
+Route::get('robots.txt', [SiteController::class, 'robots'])->withoutMiddleware('web')->name('robots');
+
 Route::get('blocked', [UnlockRequestController::class, 'create'])->name('blocked');
 Route::post('unlock-requests', [UnlockRequestController::class, 'store'])
     ->middleware('throttle:5,1')
@@ -38,11 +47,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('listings/create', [ListingController::class, 'create'])->name('listings.create');
     Route::post('listings', [ListingController::class, 'store'])->name('listings.store');
+
+    Route::post('listings/drafts', [ListingDraftController::class, 'store'])->name('listings.drafts.store');
+    Route::get('listings/{listing}/draft', [ListingDraftController::class, 'edit'])->name('listings.drafts.edit');
+    Route::put('listings/{listing}/draft', [ListingDraftController::class, 'update'])->name('listings.drafts.update');
+    Route::delete('listings/{listing}/draft', [ListingDraftController::class, 'destroy'])->name('listings.drafts.destroy');
+    Route::post('listings/{listing}/publish', [ListingDraftController::class, 'publish'])->name('listings.drafts.publish');
+
     Route::get('listings/{listing}/edit', [ListingController::class, 'edit'])->name('listings.edit');
     Route::put('listings/{listing}', [ListingController::class, 'update'])->name('listings.update');
     Route::delete('listings/{listing}', [ListingController::class, 'destroy'])->name('listings.destroy');
     Route::get('listings/{listing}/relist', [ListingController::class, 'relist'])->name('listings.relist');
     Route::post('listings/{listing}/sold', [ListingController::class, 'sold'])->name('listings.sold');
+    Route::post('listings/{listing}/renew', [ListingController::class, 'renew'])->name('listings.renew');
 
     Route::post('listings/{listing}/bids', [ListingBidController::class, 'store'])
         ->middleware('throttle:30,1')
@@ -66,6 +83,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('comments/{comment}/like', [CommentController::class, 'like'])->name('comments.like');
 
     Route::post('giveaways/{giveaway}/join', [GiveawayController::class, 'join'])->name('giveaways.join');
+
+    Route::get('saved-searches', [SavedSearchController::class, 'index'])->name('saved-searches.index');
+    Route::post('saved-searches', [SavedSearchController::class, 'store'])->name('saved-searches.store');
+    Route::delete('saved-searches/{savedSearch}', [SavedSearchController::class, 'destroy'])->name('saved-searches.destroy');
 });
 
 require __DIR__.'/settings.php';

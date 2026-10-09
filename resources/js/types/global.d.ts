@@ -26,6 +26,8 @@ declare module '@inertiajs/core' {
             auth: Auth;
             categories: CategoryNode[];
             cities: CityOption[];
+            /** Public key of the captcha widget; null while the captcha is off. */
+            captchaSiteKey: string | null;
             unreadNotifications: number;
             /** Latest notifications, loaded on demand by the bell's dropdown. */
             recentNotifications?: NotificationItem[];

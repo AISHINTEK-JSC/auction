@@ -105,6 +105,10 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 
 - Hai hình thức bán: **đấu giá** (xuôi / ngược, do engine xử lý) hoặc **chỉ đăng tin với giá cố định**. Tin giá cố định không gọi engine: không có lượt đặt hay đếm ngược, thành viên đã đăng nhập và xác thực email thấy email, số điện thoại của người bán để liên hệ, và người bán tự bấm "Đánh dấu đã bán" hoặc "Gỡ tin". Về dữ liệu, tin giá cố định có `sale_type = fixed`, `auction_id` và `auction_type` để trống, và dùng lại cột `auction_status` (đang diễn ra = đang bán, hoàn tất = đã bán, người bán huỷ = đã gỡ).
 - Tin giá cố định có thể để **giá thoả thuận** (không ghi giá), và **tự hết hạn** sau `FIXED_LISTING_DAYS` ngày (mặc định 30): lệnh `listings:expire` chạy 15 phút một lần, chuyển tin sang "Hết hạn" và báo cho người bán; tin hết hạn đăng lại được.
+- **Lưu nháp**: nút "Lưu nháp" ở form đăng tin giữ lại những gì đã điền (chỉ cần có tiêu đề), kể cả ảnh. Tin nháp nằm ở tab "Nháp" của trang "Tin đăng của tôi", chỉ người viết thấy (admin cũng không), không gọi engine, tối đa 20 tin mỗi người. Bấm "Đăng tin" trên bản nháp mới chạy đủ các kiểm tra của một tin mới và đăng ngay trên chính bản ghi đó (`moderation_status = draft` → `approved` hoặc `pending`).
+- **Gia hạn**: người bán được nhắc (chuông + email) vài ngày trước khi tin giá cố định hết hạn và bấm "Gia hạn" để tính lại thời gian hiển thị; tin đã hết hạn cũng gia hạn lại được.
+- **Thứ tự ảnh**: ở trang sửa tin, dùng mũi tên trên từng ảnh để đổi thứ tự; ảnh đầu tiên là ảnh bìa.
+- **Lưu tìm kiếm**: ở trang tìm kiếm hoặc trang danh mục, bấm "Báo khi có tin mới" để lưu từ khoá / danh mục / khu vực / hình thức đang chọn (tối đa 20 mỗi người, xem ở `/saved-searches`). Khi một tin khớp được đăng hoặc được duyệt lần đầu, người lưu nhận thông báo; từ khoá so khớp không phân biệt dấu, danh mục cha bao gồm danh mục con.
 - **Lượt xem** được đếm một lần cho mỗi phiên trình duyệt, không tính người bán và các lần trang tự làm mới. Trang tìm kiếm có sắp xếp "Xem nhiều nhất".
 - **Sửa** nội dung, ảnh và thẻ sau khi đăng (giá và thời gian của phiên đấu giá thuộc về engine, không sửa được).
 - **Đăng lại** phiên kết thúc không có người thắng hoặc tin bị từ chối: tạo tin mới, ảnh được chép từ tin cũ.
@@ -132,6 +136,17 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 - Mỗi thành viên có một **mã số 6 chữ số cấp một lần khi đăng ký và không đổi**; bấm "Đăng ký tham gia" là vào danh sách, mỗi người một lượt cho mỗi chương trình.
 - "Quay thưởng" chọn ngẫu nhiên, chỉ quay một lần; tài khoản bị khoá không trúng. Người trúng được công bố bằng tên và mã số, và nhận thông báo.
 
+**Điều khoản và quyền riêng tư**: `/terms` và `/privacy`, có liên kết ở chân trang và ở form đăng ký. Nội dung nằm trong `resources/js/pages/legal/` và là **bản mẫu**: cần rà soát lại (nên có người am hiểu pháp lý xem) trước khi chạy thật. Sửa nội dung thì đổi luôn ngày cập nhật trong `SiteController::legalProps()`. Địa chỉ liên hệ lấy từ `CONTACT_EMAIL`.
+
+**SEO và chia sẻ liên kết**
+
+- Thẻ mô tả, Open Graph, Twitter Card, `canonical` và `robots` được in sẵn trong HTML từ server (`resources/views/app.blade.php`, dữ liệu từ `App\Support\Seo`), vì bot tìm kiếm và Facebook / Zalo không chạy JavaScript. Controller gắn bằng `->withViewData('seo', Seo::...)`; trang không gắn gì (bảng điều khiển, form, cài đặt…) mặc định là `noindex`.
+- Trang tin đăng dùng ảnh bìa làm ảnh xem trước, mô tả gồm hình thức bán, giá, trạng thái, khu vực, và có JSON-LD `Product` để kết quả tìm kiếm hiện giá. Trang không có ảnh dùng `public/apple-touch-icon.png`; nên thay bằng một ảnh 1200×630 riêng của site.
+- `/sitemap.xml` liệt kê trang chủ, danh mục, thẻ, quà tặng và tối đa 5.000 tin công khai mới nhất, lưu cache 10 phút. `/robots.txt` do app sinh ra (trỏ tới sitemap, chặn các khu vực riêng tư), nên nginx phải chuyển nó cho PHP như trong `docker/nginx/default.conf`.
+- Ảnh xem trước và sitemap dùng địa chỉ tuyệt đối theo `APP_URL`: phải đặt đúng tên miền thật khi triển khai.
+
+**Captcha** (Cloudflare Turnstile) ở **đăng ký** và **đăng tin** (kể cả đăng một bản nháp; lưu nháp thì không hỏi). Tắt khi `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` để trống. Máy local dùng cặp khoá thử của Cloudflare (luôn qua, widget hiện dòng "chỉ để kiểm tra"); chạy thật cần tạo khoá riêng cho tên miền tại dash.cloudflare.com → Turnstile. Nếu không gọi được Cloudflare, yêu cầu bị từ chối chứ không cho qua.
+
 **Vai trò**: Thành viên, Kiểm duyệt viên (tin đấu giá, báo cáo, bình luận, yêu cầu mở khoá), Quản trị viên (thêm thành viên, danh mục, chặn IP / email, quà tặng, cài đặt). Đổi vai trò ở trang Thành viên.
 
 ## Cấu trúc code
@@ -139,10 +154,10 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 ```
 app/Services/AuctionEngine/   AuctionEngineClient, EngineException
 app/Services/                 ListingSyncService (snapshot + cache trạng thái trực tiếp)
-app/Actions/Listings/         CreateListing (đăng tin + mở phiên trong engine)
+app/Actions/Listings/         CreateListing (đăng tin + mở phiên trong engine), SaveDraft (lưu nháp)
 app/Console/Commands/         auctions:sync
 app/Http/Controllers/         Home, Listing, ListingBid, Comment, Dashboard, UnlockRequest, AuctionWebhook
-app/Support/                  ListingPresenter, BidPresenter (dữ liệu cho trang Inertia)
+app/Support/                  ListingPresenter, BidPresenter (dữ liệu cho trang Inertia), Seo (thẻ meta), Captcha
 app/Filament/Resources/       Trang quản trị
 resources/js/pages/           Home, listings/{Index,Show,Create,Bids}, Dashboard, auth/*, settings/*
 resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, CommentThread, …
@@ -153,7 +168,9 @@ resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, Commen
 `/admin`, dành cho quản trị viên và kiểm duyệt viên:
 
 - **Nhật ký thao tác** (chỉ quản trị viên, chỉ đọc): ai đã duyệt, từ chối, ẩn tin, huỷ phiên, khoá / mở khoá, đổi vai trò, gỡ cấm đặt giá, xoá bình luận, tạo / quay / xoá quà tặng, sửa danh mục, chặn IP / email, đổi cài đặt, và vào lúc nào. Mỗi dòng lưu sẵn mô tả đầy đủ nên vẫn đọc được sau khi đối tượng bị xoá.
-- **Bảng điều khiển**: số phiên, phiên thành công, doanh số (tổng giá chốt), người dùng mới, tin chờ duyệt, báo cáo chưa xử lý.
+- **Bảng điều khiển**: các con số tổng (số phiên, phiên thành công, doanh số, người dùng mới, tin chờ duyệt, báo cáo chưa xử lý) và hai biểu đồ theo ngày, chọn được 7 / 30 / 90 ngày: hoạt động (tin mới, giao dịch thành công, thành viên mới) và doanh số đấu giá.
+- **Cài đặt** (chỉ quản trị viên): số ngày hiển thị tin giá cố định, số ngày nhắc trước khi hết hạn, duyệt tin trước khi hiển thị, mức phạt khi từ bỏ kết quả, chính sách mật khẩu. Giá trị ở đây ghi đè `config/marketplace.php`; mỗi lần đổi được ghi vào nhật ký kèm giá trị cũ và mới.
+- **Thao tác hàng loạt**: chọn nhiều dòng rồi duyệt / ẩn tin, khoá / mở khoá tài khoản, bỏ qua báo cáo, xoá bình luận.
 - **Thành viên**: khoá / mở khoá, đổi vai trò, và nút **Chính sách mật khẩu** (độ dài, chữ hoa/thường, chữ số, ký tự đặc biệt) áp dụng cho đăng ký và đổi mật khẩu.
 - **Tin đấu giá**: duyệt, từ chối, ẩn, đồng bộ lại với engine, huỷ phiên; bật / tắt duyệt tin trước khi hiển thị.
 - **Báo cáo vi phạm**, **Bình luận**, **Yêu cầu mở khoá**, **Danh mục**, **Tặng quà**.

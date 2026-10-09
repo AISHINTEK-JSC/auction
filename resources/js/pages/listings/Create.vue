@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
-import { Banknote, CalendarClock, Gavel, Tag } from '@lucide/vue';
-import { computed } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { Banknote, CalendarClock, Gavel, Save, Tag } from '@lucide/vue';
+import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
+import CaptchaWidget from '@/components/marketplace/CaptchaWidget.vue';
 import MoneyInput from '@/components/marketplace/MoneyInput.vue';
 import ProductFields from '@/components/marketplace/ProductFields.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { formatVnd } from '@/lib/format';
+import { formatDateTime, formatVnd } from '@/lib/format';
 import { store } from '@/routes/listings';
+import {
+    destroy as destroyDraft,
+    publish as publishDraft,
+    store as storeDraft,
+    update as updateDraft,
+} from '@/routes/listings/drafts';
 import { AuctionType } from '@/types';
 import type { EditableListing } from '@/types';
 
@@ -19,7 +26,7 @@ type Source = EditableListing & {
     sale_type: 'auction' | 'fixed';
     is_negotiable: boolean;
     auction_type: number | null;
-    start_price: number;
+    start_price: number | null;
     min_bid_price: number | null;
     bid_step: number | null;
     auto_extend: boolean;
@@ -28,30 +35,43 @@ type Source = EditableListing & {
     finish_price: number | null;
 };
 
+/** A draft being continued: the same fields, plus the times the seller had picked. */
+type Draft = Source & {
+    start_time: string;
+    end_time: string;
+    updated_at: string | null;
+};
+
 const props = defineProps<{
     conditions: { value: string; label: string }[];
     /** How long a fixed-price listing stays up. */
     fixedListingDays: number;
     source: Source | null;
+    draft: Draft | null;
 }>();
 
-const source = props.source;
+const draft = props.draft;
+// What the form starts from: a draft, a listing being relisted, or nothing.
+const source = draft ?? props.source;
 
 const form = useForm({
-    relist_from: source?.id ?? null,
+    relist_from: props.source?.id ?? null,
     title: source?.title ?? '',
     description: source?.description ?? '',
     category_id: source?.category_id ?? null,
     city_id: source?.city_id ?? null,
     condition: source?.condition ?? 'used',
     images: [] as File[],
+    // Only a draft's stored images can be dropped or reordered here.
+    remove_images: [] as number[],
+    image_order: (draft?.images ?? []).map((image) => image.id),
     tags: [...(source?.tags ?? [])],
     sale_type: source?.sale_type ?? 'auction',
     is_negotiable: source?.is_negotiable ?? false,
     auction_type: source?.auction_type ?? (AuctionType.Up as number),
-    start_time: '',
+    start_time: draft?.start_time ?? '',
     start_price: (source?.start_price ?? '') as number | '',
-    end_time: '',
+    end_time: draft?.end_time ?? '',
     min_bid_price: (source?.min_bid_price ?? '') as number | '',
     bid_step: (source?.bid_step ?? '') as number | '',
     auto_extend: source?.auto_extend ?? true,
@@ -62,7 +82,11 @@ const form = useForm({
 
 const isUp = computed(() => form.auction_type === AuctionType.Up);
 const isFixed = computed(() => form.sale_type === 'fixed');
-const heading = source ? 'Đăng lại tin' : 'Đăng tin';
+const heading = draft
+    ? 'Sửa tin nháp'
+    : props.source
+      ? 'Đăng lại tin'
+      : 'Đăng tin';
 
 const saleTypeError = computed(
     () => (form.errors as Record<string, string | undefined>).sale_type,
@@ -160,10 +184,10 @@ const priceSummary = computed(() => {
     return `Giá giảm ${formatVnd(form.down_price)} mỗi ${form.down_minutes} phút, chạm ${lowest} sau ${drops} lần giảm (khoảng ${humanize(drops * form.down_minutes)}). Người mua đầu tiên chấp nhận giá sẽ thắng.`;
 });
 
-function submit() {
-    form.transform((data) => ({
+/** Only what belongs to the chosen auction type is sent. */
+function trimmed<T extends Record<string, unknown>>(data: T) {
+    return {
         ...data,
-        // Only send what belongs to the chosen auction type.
         ...(isUp.value
             ? { down_minutes: '', down_price: '', finish_price: '' }
             : {
@@ -172,7 +196,62 @@ function submit() {
                   bid_step: '',
                   auto_extend: false,
               }),
-    })).post(store().url, { forceFormData: true });
+    };
+}
+
+// Asked for when posting, not when saving a draft. A token works once.
+const captcha = ref<InstanceType<typeof CaptchaWidget> | null>(null);
+const captchaToken = ref('');
+const captchaError = computed(
+    () =>
+        (form.errors as Record<string, string | undefined>)[
+            'cf-turnstile-response'
+        ],
+);
+
+/** Post the listing for real; a draft is published in place. */
+function submit() {
+    form.transform((data) => ({
+        ...trimmed(data),
+        'cf-turnstile-response': captchaToken.value,
+    })).post(draft ? publishDraft(draft.id).url : store().url, {
+        forceFormData: true,
+        onFinish: () => captcha.value?.reset(),
+    });
+}
+
+/**
+ * Keep what is filled in so far. Nothing is checked beyond the title, and
+ * nothing is shown to anyone or sent to the auction engine.
+ */
+function saveDraft() {
+    if (draft) {
+        // Files cannot be sent with PUT, so the form posts and names the real method.
+        form.transform((data) => ({ ...data, _method: 'put' })).post(
+            updateDraft(draft.id).url,
+            // Rebuilt from what was saved: the uploads are stored images now.
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                preserveState: 'errors',
+            },
+        );
+    } else {
+        // The same page comes back as the draft's form: start it afresh.
+        form.transform((data) => data).post(storeDraft().url, {
+            forceFormData: true,
+            preserveState: 'errors',
+        });
+    }
+}
+
+function deleteDraft() {
+    if (
+        draft &&
+        window.confirm('Xoá tin nháp này? Không khôi phục lại được.')
+    ) {
+        router.delete(destroyDraft(draft.id).url);
+    }
 }
 </script>
 
@@ -182,9 +261,13 @@ function submit() {
     <form class="mx-auto max-w-3xl space-y-6" @submit.prevent="submit">
         <h1 class="text-2xl font-semibold">{{ heading }}</h1>
 
-        <p v-if="source" class="text-sm text-muted-foreground">
-            Nội dung và hình ảnh được lấy từ tin cũ. Hãy đặt lại giá và thời
-            gian cho phiên mới.
+        <p v-if="draft" class="text-sm text-muted-foreground">
+            Bản nháp lưu lúc {{ formatDateTime(draft.updated_at) }}. Hoàn thiện
+            rồi bấm "Đăng tin", hoặc "Lưu nháp" để sửa tiếp sau.
+        </p>
+        <p v-else-if="source" class="text-sm text-muted-foreground">
+            Nội dung và hình ảnh được lấy từ tin cũ. Hãy kiểm tra lại giá và
+            hình thức bán.
         </p>
 
         <p
@@ -196,10 +279,13 @@ function submit() {
         </p>
 
         <ProductFields
+            v-model:removed="form.remove_images"
+            v-model:order="form.image_order"
             :form="form"
             :errors="form.errors"
             :conditions="conditions"
             :existing-images="source?.images"
+            :removable="!!draft"
         />
 
         <section class="space-y-5 rounded-lg border bg-background p-4">
@@ -524,11 +610,43 @@ function submit() {
             </template>
         </section>
 
-        <div class="flex justify-end">
-            <Button type="submit" size="lg" :disabled="form.processing">
-                <Spinner v-if="form.processing" />
-                Đăng tin
-            </Button>
+        <CaptchaWidget
+            ref="captcha"
+            v-model="captchaToken"
+            :error="captchaError"
+        />
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-xs text-muted-foreground">
+                Tin nháp chỉ mình bạn thấy, và chỉ cần có tiêu đề là lưu được.
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <Button
+                    v-if="draft"
+                    type="button"
+                    variant="ghost"
+                    class="text-destructive"
+                    :disabled="form.processing"
+                    @click="deleteDraft"
+                >
+                    Xoá nháp
+                </Button>
+                <!-- type="button": saving a draft must not trip the form's required fields. -->
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    :disabled="form.processing"
+                    @click="saveDraft"
+                >
+                    <Save class="size-4" />
+                    Lưu nháp
+                </Button>
+                <Button type="submit" size="lg" :disabled="form.processing">
+                    <Spinner v-if="form.processing" />
+                    Đăng tin
+                </Button>
+            </div>
         </div>
     </form>
 </template>

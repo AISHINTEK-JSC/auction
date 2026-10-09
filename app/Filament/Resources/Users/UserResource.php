@@ -7,11 +7,15 @@ use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
 use App\Support\AdminLog;
+use App\Support\MarketplaceSettings;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -19,6 +23,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class UserResource extends Resource
 {
@@ -76,7 +81,7 @@ class UserResource extends Resource
                 // Times the member gave up an auction result within the penalty window.
                 TextColumn::make('recent_forfeits_count')->label('Từ bỏ gần đây')
                     ->counts(['forfeits as recent_forfeits_count' => fn ($query) => $query
-                        ->where('created_at', '>=', now()->subDays((int) config('marketplace.forfeit_window_days')))])
+                        ->where('created_at', '>=', now()->subDays(MarketplaceSettings::forfeitWindowDays()))])
                     ->sortable(),
                 TextColumn::make('bid_banned_until')->label('Cấm đặt giá tới')->dateTime('d/m/Y H:i')->placeholder('—'),
                 TextColumn::make('created_at')->label('Tham gia')->dateTime('d/m/Y')->sortable(),
@@ -141,6 +146,50 @@ class UserResource extends Resource
                         ));
                     }),
                 EditAction::make()->after(fn (User $record) => AdminLog::record('user.updated', $record, sprintf('Sửa thông tin thành viên %s (%s)', $record->name, $record->email))),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('blockSelected')->label('Khoá các tài khoản đã chọn')->icon(Heroicon::OutlinedLockClosed)->color('danger')
+                        ->schema([TextInput::make('block_reason')->label('Lý do')->maxLength(255)])
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data): void {
+                            /** @var Collection<int, User> $records */
+                            // Never yourself, and not accounts that are already blocked.
+                            $targets = $records->reject(fn (User $user) => $user->is(auth()->user()) || $user->isBlocked());
+
+                            foreach ($targets as $user) {
+                                $user->forceFill(['blocked_at' => now(), 'block_reason' => $data['block_reason'] ?? null])->save();
+                            }
+
+                            if ($targets->isNotEmpty()) {
+                                AdminLog::record('user.bulk_blocked', null, sprintf(
+                                    'Khoá %d tài khoản: %s%s',
+                                    $targets->count(),
+                                    $targets->pluck('email')->join(', '),
+                                    filled($data['block_reason'] ?? null) ? ' — lý do: '.$data['block_reason'] : '',
+                                ));
+                            }
+
+                            Notification::make()->title('Đã khoá '.$targets->count().' tài khoản')->success()->send();
+                        }),
+                    BulkAction::make('unblockSelected')->label('Mở khoá các tài khoản đã chọn')->icon(Heroicon::OutlinedLockOpen)
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records): void {
+                            /** @var Collection<int, User> $records */
+                            $targets = $records->filter(fn (User $user) => $user->isBlocked());
+
+                            foreach ($targets as $user) {
+                                $user->forceFill(['blocked_at' => null, 'block_reason' => null])->save();
+                            }
+
+                            if ($targets->isNotEmpty()) {
+                                AdminLog::record('user.bulk_unblocked', null, sprintf('Mở khoá %d tài khoản: %s', $targets->count(), $targets->pluck('email')->join(', ')));
+                            }
+
+                            Notification::make()->title('Đã mở khoá '.$targets->count().' tài khoản')->success()->send();
+                        }),
+                ]),
             ]);
     }
 

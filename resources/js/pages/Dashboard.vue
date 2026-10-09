@@ -5,11 +5,26 @@ import { computed, ref } from 'vue';
 import AuctionCard from '@/components/marketplace/AuctionCard.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { create, destroy, edit, relist, sold } from '@/routes/listings';
+import {
+    create,
+    destroy,
+    edit,
+    relist,
+    renew as renewRoute,
+    sold,
+} from '@/routes/listings';
+import { edit as editDraft } from '@/routes/listings/drafts';
 import { AuctionStatus } from '@/types';
 import type { DashboardCard, Seller } from '@/types';
 
-type Tab = 'selling' | 'bidding' | 'watching' | 'won' | 'ended' | 'review';
+type Tab =
+    | 'selling'
+    | 'bidding'
+    | 'watching'
+    | 'won'
+    | 'ended'
+    | 'drafts'
+    | 'review';
 
 const props = defineProps<{
     seller: Seller;
@@ -18,6 +33,7 @@ const props = defineProps<{
     watching: DashboardCard[];
     won: DashboardCard[];
     ended: DashboardCard[];
+    drafts: DashboardCard[];
     review: DashboardCard[];
 }>();
 
@@ -44,15 +60,24 @@ const tabs: { key: Tab; label: string; empty: string }[] = [
         empty: 'Chưa có phiên nào của bạn kết thúc.',
     },
     {
+        key: 'drafts',
+        label: 'Nháp',
+        empty: 'Bạn không có tin nháp nào.',
+    },
+    {
         key: 'review',
         label: 'Chờ duyệt',
         empty: 'Không có tin nào đang chờ duyệt hoặc bị từ chối.',
     },
 ];
 
-// "Chờ duyệt" only earns a tab when there is something in it.
+// "Nháp" and "Chờ duyệt" only earn a tab when there is something in them.
 const visibleTabs = computed(() =>
-    tabs.filter((tab) => tab.key !== 'review' || props.review.length > 0),
+    tabs.filter(
+        (tab) =>
+            (tab.key !== 'review' && tab.key !== 'drafts') ||
+            props[tab.key].length > 0,
+    ),
 );
 
 const active = ref<Tab>('selling');
@@ -68,6 +93,10 @@ function cancel(listing: DashboardCard) {
     if (window.confirm(question)) {
         router.delete(destroy(listing.id).url, { preserveScroll: true });
     }
+}
+
+function renew(listing: DashboardCard) {
+    router.post(renewRoute(listing.id).url, {}, { preserveScroll: true });
 }
 
 function markSold(listing: DashboardCard) {
@@ -155,8 +184,17 @@ function markSold(listing: DashboardCard) {
                     Ghi chú: {{ listing.moderation_note }}
                 </p>
 
+                <Button
+                    v-if="active === 'drafts'"
+                    variant="outline"
+                    size="sm"
+                    as-child
+                >
+                    <Link :href="editDraft(listing.id)">Sửa tiếp</Link>
+                </Button>
+
                 <div
-                    v-if="
+                    v-else-if="
                         active === 'selling' ||
                         active === 'ended' ||
                         active === 'review'
@@ -192,6 +230,15 @@ function markSold(listing: DashboardCard) {
                         @click="markSold(listing)"
                     >
                         Đã bán
+                    </Button>
+                    <Button
+                        v-if="listing.can.renew"
+                        variant="outline"
+                        size="sm"
+                        class="flex-1"
+                        @click="renew(listing)"
+                    >
+                        Gia hạn
                     </Button>
                     <Button
                         v-if="listing.can.relist"

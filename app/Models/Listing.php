@@ -55,6 +55,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $winning_price
  * @property CarbonInterface|null $synced_at
  * @property CarbonInterface|null $closed_notified_at
+ * @property CarbonInterface|null $expiry_reminded_at
  * @property CarbonInterface|null $created_at
  */
 #[Fillable([
@@ -70,13 +71,14 @@ class Listing extends Model
     use HasFactory;
 
     /**
-     * Same as the column default, so a freshly created model knows its sale
-     * type without being re-read from the database.
+     * Same as the column defaults, so a freshly created model knows its sale
+     * type and moderation status without being re-read from the database.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
         'sale_type' => 'auction',
+        'moderation_status' => 'approved',
     ];
 
     /**
@@ -89,6 +91,7 @@ class Listing extends Model
             'sale_type' => SaleType::class,
             'moderation_status' => ModerationStatus::class,
             'closed_notified_at' => 'datetime',
+            'expiry_reminded_at' => 'datetime',
             'auction_type' => AuctionType::class,
             'auction_status' => AuctionStatus::class,
             'start_time' => 'datetime',
@@ -186,6 +189,15 @@ class Listing extends Model
     public function reports(): HasMany
     {
         return $this->hasMany(ListingReport::class);
+    }
+
+    /**
+     * Still being written by its seller: only they can see it, and only in the
+     * draft form.
+     */
+    public function isDraft(): bool
+    {
+        return $this->moderation_status === ModerationStatus::Draft;
     }
 
     public function isAuction(): bool

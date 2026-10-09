@@ -10,6 +10,24 @@ use App\Models\User;
 class ListingPolicy
 {
     /**
+     * A draft is not a listing yet: the only thing anyone can do with it is
+     * its seller working on it (manageDraft).
+     */
+    public function before(?User $user, string $ability, mixed $listing = null): ?bool
+    {
+        if ($listing instanceof Listing && $listing->isDraft() && $ability !== 'manageDraft') {
+            return false;
+        }
+
+        return null;
+    }
+
+    public function manageDraft(User $user, Listing $listing): bool
+    {
+        return $listing->isDraft() && $user->id === $listing->user_id;
+    }
+
+    /**
      * The detail page needs an auction in the engine. Unpublished listings that
      * have one (hidden by a moderator) stay visible to their seller and to staff.
      */
@@ -50,6 +68,18 @@ class ListingPolicy
         return $user->id === $listing->user_id
             && $listing->isFixedPrice()
             && $listing->auction_status->isOpen();
+    }
+
+    /**
+     * Give a fixed-price listing a fresh lifetime: while it is for sale, or
+     * after it ran out of time. Auctions end when the engine says so.
+     */
+    public function renew(User $user, Listing $listing): bool
+    {
+        return $user->id === $listing->user_id
+            && $listing->isFixedPrice()
+            && $listing->moderation_status !== ModerationStatus::Rejected
+            && ($listing->auction_status->isOpen() || $listing->auction_status === AuctionStatus::Expired);
     }
 
     /**

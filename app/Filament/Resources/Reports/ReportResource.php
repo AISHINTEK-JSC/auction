@@ -10,6 +10,8 @@ use App\Services\ListingModeration;
 use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -18,6 +20,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class ReportResource extends Resource
 {
@@ -97,6 +100,28 @@ class ReportResource extends Resource
                             $record->listing->title,
                         ));
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('dismissSelected')->label('Bỏ qua các báo cáo đã chọn')->icon(Heroicon::OutlinedXMark)
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records): void {
+                            $open = $records->whereNull('handled_at');
+
+                            ListingReport::query()->whereKey($open->modelKeys())->update(['handled_at' => now(), 'handled_by' => auth()->id()]);
+
+                            if ($open->isNotEmpty()) {
+                                AdminLog::record('report.bulk_dismissed', null, sprintf(
+                                    'Bỏ qua %d báo cáo về các tin: %s',
+                                    $open->count(),
+                                    $open->pluck('listing_id')->unique()->map(fn ($id) => "#{$id}")->join(', '),
+                                ));
+                            }
+
+                            Notification::make()->title('Đã bỏ qua '.$open->count().' báo cáo')->success()->send();
+                        }),
+                ]),
             ]);
     }
 

@@ -6,6 +6,7 @@ use App\Models\Listing;
 use App\Models\Review;
 use App\Models\User;
 use App\Support\ListingPresenter;
+use App\Support\Seo;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,6 +33,6 @@ class UserProfileController extends Controller
                 ->get()
                 ->map(fn (Review $review) => ListingPresenter::review($review))
                 ->all()),
-        ]);
+        ])->withViewData('seo', Seo::page($user->name, 'Tin đang bán và đánh giá của thành viên '.$user->name.' ('.$user->member_code.').'));
     }
 }

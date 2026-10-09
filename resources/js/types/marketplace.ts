@@ -53,7 +53,7 @@ export type ListingCard = {
     /** False while the listing waits for approval: it has no detail page yet. */
     has_auction: boolean;
     leader_id: number | null;
-    moderation: 'pending' | 'approved' | 'rejected' | 'hidden';
+    moderation: 'draft' | 'pending' | 'approved' | 'rejected' | 'hidden';
     moderation_label: string;
     moderation_note: string | null;
 };
@@ -66,6 +66,7 @@ export type DashboardCard = ListingCard & {
         cancel: boolean;
         relist: boolean;
         mark_sold: boolean;
+        renew: boolean;
     };
 };
 
@@ -125,6 +126,7 @@ export type ListingDetail = ListingCard & {
         settle: boolean;
         cancel: boolean;
         mark_sold: boolean;
+        renew: boolean;
     };
     /** The other side's contact details; only for the seller and the winner of a finished auction. */
     contact: Contact | null;

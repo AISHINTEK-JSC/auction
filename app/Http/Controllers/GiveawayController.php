@@ -6,6 +6,7 @@ use App\Models\Giveaway;
 use App\Models\GiveawayEntry;
 use App\Models\User;
 use App\Services\GiveawayService;
+use App\Support\Seo;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ class GiveawayController extends Controller
                 ->orderBy('ends_at')
                 ->paginate(12)
                 ->through(fn (Giveaway $giveaway) => $this->present($giveaway, $user)),
-        ]);
+        ])->withViewData('seo', Seo::page('Quà tặng', 'Các chương trình tặng quà dành cho thành viên: đăng ký miễn phí bằng mã số thành viên, quay thưởng ngẫu nhiên.'));
     }
 
     public function show(Request $request, Giveaway $giveaway): Response
@@ -44,7 +45,7 @@ class GiveawayController extends Controller
                     ])
                     ->all()),
             ],
-        ]);
+        ])->withViewData('seo', Seo::giveaway($giveaway));
     }
 
     public function join(Request $request, Giveaway $giveaway, GiveawayService $giveaways): RedirectResponse

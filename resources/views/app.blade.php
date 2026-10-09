@@ -37,8 +37,26 @@
         @fonts
 
         @vite(['resources/css/app.css', 'resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])
+        {{-- Description, robots and link-preview tags. Rendered here, not in Vue: crawlers
+             and chat apps read this HTML without running JavaScript. See App\Support\Seo. --}}
+        @php($seo = \App\Support\Seo::resolve($seo ?? null))
+        <meta name="description" content="{{ $seo['description'] }}">
+        <meta name="robots" content="{{ $seo['indexable'] ? 'index, follow' : 'noindex, nofollow' }}">
+        <link rel="canonical" href="{{ $seo['url'] }}">
+        <meta property="og:site_name" content="{{ config('app.name') }}">
+        <meta property="og:locale" content="vi_VN">
+        <meta property="og:type" content="{{ $seo['type'] }}">
+        <meta property="og:title" content="{{ $seo['title'] }}">
+        <meta property="og:description" content="{{ $seo['description'] }}">
+        <meta property="og:url" content="{{ $seo['url'] }}">
+        <meta property="og:image" content="{{ $seo['image'] }}">
+        <meta name="twitter:card" content="{{ $seo['has_large_image'] ? 'summary_large_image' : 'summary' }}">
+        @if ($seo['json_ld'])
+            <script type="application/ld+json">{!! json_encode($seo['json_ld'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+        @endif
+
         <x-inertia::head>
-            <title>{{ config('app.name', 'Laravel') }}</title>
+            <title>{{ $seo['title'] }}</title>
         </x-inertia::head>
     </head>
     <body class="font-sans antialiased">

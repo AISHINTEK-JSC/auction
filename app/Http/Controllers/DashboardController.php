@@ -31,7 +31,8 @@ class DashboardController extends Controller
             'watching' => $this->cards($user, $user->watchedListings()->published()),
             'won' => $this->cards($user, Listing::query()->published()->where('winner_id', $user->id)),
             'ended' => $this->cards($user, Listing::query()->published()->whereBelongsTo($user)->whereNotIn('auction_status', $open)),
-            'review' => $this->cards($user, Listing::query()->whereBelongsTo($user)->where('moderation_status', '!=', ModerationStatus::Approved)),
+            'drafts' => $this->cards($user, Listing::query()->whereBelongsTo($user)->where('moderation_status', ModerationStatus::Draft)),
+            'review' => $this->cards($user, Listing::query()->whereBelongsTo($user)->whereNotIn('moderation_status', [ModerationStatus::Approved, ModerationStatus::Draft])),
         ]);
     }
 
@@ -54,6 +55,7 @@ class DashboardController extends Controller
                     'cancel' => $user->can('cancel', $listing),
                     'relist' => $user->can('relist', $listing),
                     'mark_sold' => $user->can('markSold', $listing),
+                    'renew' => $user->can('renew', $listing),
                 ],
             ])
             ->all());

@@ -23,6 +23,7 @@ const form = useForm({
     images: [] as File[],
     tags: [...props.listing.tags],
     remove_images: [] as number[],
+    image_order: props.listing.images.map((image) => image.id),
 });
 
 function submit() {
@@ -44,6 +45,7 @@ function submit() {
 
         <ProductFields
             v-model:removed="form.remove_images"
+            v-model:order="form.image_order"
             :form="form"
             :errors="form.errors"
             :conditions="conditions"

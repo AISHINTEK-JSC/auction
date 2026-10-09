@@ -6,6 +6,7 @@ use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
 use App\Enums\SaleType;
 use App\Models\Listing;
+use App\Rules\PassesCaptcha;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,15 @@ class StoreListingRequest extends FormRequest
         return $id > 0 ? Listing::query()->with('images')->find($id) : null;
     }
 
+    /**
+     * Images the new listing already has without any upload: those of the
+     * listing it is relisted from.
+     */
+    protected function reusedImageCount(): int
+    {
+        return $this->source()?->images->count() ?? 0;
+    }
+
     public function isNegotiable(): bool
     {
         return $this->input('sale_type') === SaleType::Fixed->value && $this->boolean('is_negotiable');
@@ -41,10 +51,12 @@ class StoreListingRequest extends FormRequest
     {
         $up = AuctionType::Up->value;
         $down = AuctionType::Down->value;
-        $reused = $this->source()?->images->count() ?? 0;
+        $reused = $this->reusedImageCount();
         $auctionOnly = 'exclude_if:sale_type,'.SaleType::Fixed->value;
 
         return [
+            // Posting (also publishing a draft) is where spam would come in; saving a draft is not checked.
+            ...PassesCaptcha::rules(),
             'relist_from' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:50000'],
@@ -110,6 +122,14 @@ class StoreListingRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return PassesCaptcha::messages();
     }
 
     /**

@@ -13,6 +13,7 @@ import Countdown from '@/components/marketplace/Countdown.vue';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime, formatPrice } from '@/lib/format';
 import { edit, show } from '@/routes/listings';
+import { edit as editDraft } from '@/routes/listings/drafts';
 import { AuctionStatus, AuctionType } from '@/types';
 import type { ListingCard } from '@/types';
 
@@ -22,9 +23,16 @@ defineProps<{
 </script>
 
 <template>
-    <!-- A listing still waiting for approval has no auction, hence no detail page. -->
+    <!-- A draft opens in its form; a listing still waiting for approval has no
+         auction, hence no detail page. -->
     <Link
-        :href="listing.has_auction ? show(listing.id) : edit(listing.id)"
+        :href="
+            listing.moderation === 'draft'
+                ? editDraft(listing.id)
+                : listing.has_auction
+                  ? show(listing.id)
+                  : edit(listing.id)
+        "
         class="group flex flex-col overflow-hidden rounded-lg border bg-card text-card-foreground transition-shadow hover:shadow-md"
     >
         <div class="relative aspect-square bg-muted">

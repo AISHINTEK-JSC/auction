@@ -6,12 +6,16 @@ use App\Filament\Resources\Comments\Pages\ManageComments;
 use App\Models\Comment;
 use App\Support\AdminLog;
 use BackedEnum;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
 class CommentResource extends Resource
@@ -59,6 +63,25 @@ class CommentResource extends Resource
                     $record->listing_id,
                     Str::limit($record->body, 120),
                 ))),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('deleteSelected')->label('Xoá các bình luận đã chọn')->icon(Heroicon::OutlinedTrash)->color('danger')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records): void {
+                            /** @var Collection<int, Comment> $records */
+                            AdminLog::record('comment.bulk_deleted', null, sprintf(
+                                'Xoá %d bình luận: %s',
+                                $records->count(),
+                                $records->map(fn (Comment $comment) => '"'.Str::limit($comment->body, 40).'"')->join(', '),
+                            ));
+
+                            Comment::query()->whereKey($records->modelKeys())->delete();
+
+                            Notification::make()->title('Đã xoá '.$records->count().' bình luận')->success()->send();
+                        }),
+                ]),
             ]);
     }
 

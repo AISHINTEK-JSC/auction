@@ -12,7 +12,9 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
+use App\Services\ListingImages;
 use App\Support\HtmlCleaner;
+use App\Support\MarketplaceSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -25,7 +27,10 @@ class CreateListing
 {
     private const ENGINE_DATE_FORMAT = 'Y-m-d H:i';
 
-    public function __construct(private readonly AuctionEngineClient $engine) {}
+    public function __construct(
+        private readonly AuctionEngineClient $engine,
+        private readonly ListingImages $images,
+    ) {}
 
     /**
      * Store the listing with its images and tags and, unless it is a fixed-price
@@ -38,10 +43,11 @@ class CreateListing
      * @param  array<string, mixed>  $data  validated StoreListingRequest input
      * @param  list<UploadedFile>  $images
      * @param  Listing|null  $source  a finished listing being put up again; its images are copied
+     * @param  Listing|null  $draft  a draft being published: it becomes the listing, keeping its images
      *
      * @throws EngineException
      */
-    public function handle(User $seller, array $data, array $images, ?Listing $source = null): Listing
+    public function handle(User $seller, array $data, array $images, ?Listing $source = null, ?Listing $draft = null): Listing
     {
         $saleType = SaleType::from($data['sale_type']);
         // Null for a fixed-price listing: it has no auction, so none of the fields below apply.
@@ -52,56 +58,52 @@ class CreateListing
         // "Giá thoả thuận" stores no price; only fixed-price listings may use it.
         $negotiable = $saleType === SaleType::Fixed && ($data['is_negotiable'] ?? false);
         $price = $negotiable ? 0 : (int) $data['start_price'];
-        // An auction ends when the engine says so; a fixed-price listing after its lifetime.
-        $endsAt = $saleType === SaleType::Fixed ? self::fixedListingDeadline() : $endTime;
+
+        $attributes = [
+            'user_id' => $seller->id,
+            'category_id' => $data['category_id'],
+            'city_id' => $data['city_id'],
+            'title' => $data['title'],
+            'description' => HtmlCleaner::clean($data['description'] ?? null),
+            'condition' => $data['condition'],
+            'moderation_status' => $needsApproval ? ModerationStatus::Pending : ModerationStatus::Approved,
+            'sale_type' => $saleType,
+            'auction_type' => $type,
+            'start_price' => $price,
+            'is_negotiable' => $negotiable,
+            'min_bid_price' => $type === AuctionType::Up ? ($data['min_bid_price'] ?? null) : null,
+            'bid_step' => $type === AuctionType::Up ? ($data['bid_step'] ?? null) : null,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'auto_extend' => $type === AuctionType::Up && ($data['auto_extend'] ?? false),
+            'down_time' => $type === AuctionType::Down ? (int) $data['down_minutes'] * 60 : null,
+            'down_price' => $type === AuctionType::Down ? $data['down_price'] : null,
+            'finish_price' => $type === AuctionType::Down ? ($data['finish_price'] ?? null) : null,
+            // An auction starts as "upcoming" until the engine says otherwise;
+            // a fixed-price listing is simply for sale.
+            'auction_status' => $saleType === SaleType::Auction ? AuctionStatus::Upcoming : AuctionStatus::Running,
+            'current_price' => $price,
+            // An auction ends when the engine says so; a fixed-price listing after its lifetime.
+            'ends_at' => $saleType === SaleType::Fixed ? self::fixedListingDeadline() : $endTime,
+        ];
 
         $storedPaths = [];
+        $removedPaths = [];
         $auctionId = null;
 
         try {
-            return DB::transaction(function () use ($seller, $data, $images, $source, $saleType, $type, $startTime, $endTime, $needsApproval, $negotiable, $price, $endsAt, &$storedPaths, &$auctionId) {
-                $listing = Listing::query()->create([
-                    'user_id' => $seller->id,
-                    'category_id' => $data['category_id'],
-                    'city_id' => $data['city_id'],
-                    'title' => $data['title'],
-                    'description' => HtmlCleaner::clean($data['description'] ?? null),
-                    'condition' => $data['condition'],
-                    'moderation_status' => $needsApproval ? ModerationStatus::Pending : ModerationStatus::Approved,
-                    'relisted_from_id' => $source?->id,
-                    'sale_type' => $saleType,
-                    'auction_type' => $type,
-                    'start_price' => $price,
-                    'is_negotiable' => $negotiable,
-                    'min_bid_price' => $type === AuctionType::Up ? ($data['min_bid_price'] ?? null) : null,
-                    'bid_step' => $type === AuctionType::Up ? ($data['bid_step'] ?? null) : null,
-                    'start_time' => $startTime,
-                    'end_time' => $endTime,
-                    'auto_extend' => $type === AuctionType::Up && ($data['auto_extend'] ?? false),
-                    'down_time' => $type === AuctionType::Down ? (int) $data['down_minutes'] * 60 : null,
-                    'down_price' => $type === AuctionType::Down ? $data['down_price'] : null,
-                    'finish_price' => $type === AuctionType::Down ? ($data['finish_price'] ?? null) : null,
-                    // An auction starts as "upcoming" until the engine says otherwise;
-                    // a fixed-price listing is simply for sale.
-                    'auction_status' => $saleType === SaleType::Auction ? AuctionStatus::Upcoming : AuctionStatus::Running,
-                    'current_price' => $price,
-                    'ends_at' => $endsAt,
-                ]);
+            $listing = DB::transaction(function () use ($attributes, $data, $images, $source, $draft, $saleType, $needsApproval, &$storedPaths, &$removedPaths, &$auctionId) {
+                if ($draft !== null) {
+                    $listing = $draft;
+                    // It is posted now, not when the draft was started.
+                    $listing->fill($attributes)->forceFill(['created_at' => now()])->save();
 
-                $position = 0;
-
-                foreach ($source->images ?? [] as $image) {
-                    $path = "listings/{$listing->id}/".basename($image->path);
-
-                    if (Storage::disk('public')->copy($image->path, $path)) {
-                        $storedPaths[] = $path;
-                        $listing->images()->create(['path' => $path, 'position' => $position++]);
-                    }
-                }
-
-                foreach ($images as $image) {
-                    $storedPaths[] = $path = $image->store("listings/{$listing->id}", 'public');
-                    $listing->images()->create(['path' => $path, 'position' => $position++]);
+                    $changes = $this->images->sync($listing, $data['remove_images'] ?? [], $data['image_order'] ?? [], $images);
+                    $storedPaths = $changes['stored'];
+                    $removedPaths = $changes['removed'];
+                } else {
+                    $listing = Listing::query()->create($attributes + ['relisted_from_id' => $source?->id]);
+                    $storedPaths = $this->storeImages($listing, $source, $images);
                 }
 
                 $listing->tags()->sync(self::tagIds($data['tags'] ?? []));
@@ -120,8 +122,15 @@ class CreateListing
                 rescue(fn () => $this->engine->cancelAuction($auctionId));
             }
 
+            // A draft that could not be published is a draft again, with everything it had.
+            $draft?->refresh();
+
             throw $e;
         }
+
+        Storage::disk('public')->delete($removedPaths);
+
+        return $listing;
     }
 
     /**
@@ -144,7 +153,7 @@ class CreateListing
      */
     public static function fixedListingDeadline(): CarbonInterface
     {
-        return now()->addDays((int) config('marketplace.fixed_listing_days'));
+        return now()->addDays(MarketplaceSettings::fixedListingDays());
     }
 
     public static function approvalRequired(): bool
@@ -167,6 +176,35 @@ class CreateListing
                 ['name' => $name],
             )->id)
             ->all());
+    }
+
+    /**
+     * The images of a brand-new listing: those of the listing it was relisted
+     * from, copied, followed by the uploads.
+     *
+     * @param  list<UploadedFile>  $uploads
+     * @return list<string> the stored paths
+     */
+    private function storeImages(Listing $listing, ?Listing $source, array $uploads): array
+    {
+        $stored = [];
+        $position = 0;
+
+        foreach ($source->images ?? [] as $image) {
+            $path = "listings/{$listing->id}/".basename($image->path);
+
+            if (Storage::disk('public')->copy($image->path, $path)) {
+                $stored[] = $path;
+                $listing->images()->create(['path' => $path, 'position' => $position++]);
+            }
+        }
+
+        foreach ($uploads as $upload) {
+            $stored[] = $path = ListingImages::store($listing, $upload);
+            $listing->images()->create(['path' => $path, 'position' => $position++]);
+        }
+
+        return $stored;
     }
 
     /**

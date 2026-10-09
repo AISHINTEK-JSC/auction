@@ -102,6 +102,14 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     }
 
     /**
+     * @return HasMany<SavedSearch, $this>
+     */
+    public function savedSearches(): HasMany
+    {
+        return $this->hasMany(SavedSearch::class);
+    }
+
+    /**
      * @return HasMany<Forfeit, $this>
      */
     public function forfeits(): HasMany

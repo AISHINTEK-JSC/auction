@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
-import { Mail, MapPin, Phone } from '@lucide/vue';
+import { Mail, MapPin, Phone, RefreshCw } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { useAuthUser } from '@/composables/useAuthUser';
 import { login } from '@/routes';
-import { destroy, sold } from '@/routes/listings';
+import { formatDateTime } from '@/lib/format';
+import { destroy, renew as renewRoute, sold } from '@/routes/listings';
 import { send as resendVerification } from '@/routes/verification';
 import { AuctionStatus } from '@/types';
 import type { ListingDetail } from '@/types';
@@ -29,6 +30,10 @@ function markSold() {
     }
 }
 
+function renew() {
+    router.post(renewRoute(props.listing.id).url, {}, { preserveScroll: true });
+}
+
 function takeDown() {
     if (window.confirm('Gỡ tin này khỏi sàn?')) {
         router.delete(destroy(props.listing.id).url, { preserveScroll: true });
@@ -47,6 +52,10 @@ function takeDown() {
             <Button v-if="listing.can.mark_sold" @click="markSold">
                 Đánh dấu đã bán
             </Button>
+            <Button v-if="listing.can.renew" variant="outline" @click="renew">
+                <RefreshCw class="size-4" />
+                Gia hạn
+            </Button>
             <Button
                 v-if="listing.can.cancel"
                 variant="outline"
@@ -55,6 +64,17 @@ function takeDown() {
                 Gỡ tin
             </Button>
         </div>
+        <p
+            v-if="listing.can.renew && listing.ends_at"
+            class="text-xs text-muted-foreground"
+        >
+            {{
+                listing.status === AuctionStatus.Expired
+                    ? 'Tin đã hết hạn.'
+                    : `Tin hiển thị đến ${formatDateTime(listing.ends_at)}.`
+            }}
+            Gia hạn để tính lại thời gian hiển thị từ hôm nay.
+        </p>
     </div>
 
     <!-- No longer for sale -->

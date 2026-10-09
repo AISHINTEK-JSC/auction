@@ -8,11 +8,17 @@ return [
     |--------------------------------------------------------------------------
     |
     | A fixed-price listing stays up for this many days, then expires on its
-    | own. Its seller can put it up again from "Tin đăng của tôi".
+    | own. Its seller can renew it or put it up again from "Tin đăng của tôi".
+    |
+    | These are the defaults: an admin can override every value in this file
+    | from the admin panel (Cài đặt), see App\Support\MarketplaceSettings.
     |
     */
 
     'fixed_listing_days' => (int) env('FIXED_LISTING_DAYS', 30),
+
+    // The seller is reminded this many days before the listing expires (0 = never).
+    'expiry_reminder_days' => (int) env('EXPIRY_REMINDER_DAYS', 3),
 
     /*
     |--------------------------------------------------------------------------
@@ -25,6 +31,18 @@ return [
     | The first time is only a warning.
     |
     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Contact
+    |--------------------------------------------------------------------------
+    |
+    | The address shown on the terms and privacy pages for questions and
+    | requests about personal data.
+    |
+    */
+
+    'contact_email' => env('CONTACT_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
 
     'forfeit_window_days' => (int) env('FORFEIT_WINDOW_DAYS', 90),
 

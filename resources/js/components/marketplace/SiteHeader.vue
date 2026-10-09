@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
+    BellRing,
     ChevronDown,
     Gavel,
     Gift,
@@ -36,6 +37,7 @@ import { getInitials } from '@/composables/useInitials';
 import { dashboard, home, login, register } from '@/routes';
 import { show as categoryShow } from '@/routes/categories';
 import { index as giveawaysIndex } from '@/routes/giveaways';
+import { index as savedSearchesIndex } from '@/routes/saved-searches';
 import { create, index } from '@/routes/listings';
 
 const page = usePage();
@@ -180,6 +182,15 @@ function search() {
                         >
                             <LayoutGrid class="mr-2 size-4" />
                             Tin đăng của tôi
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem as-child>
+                        <Link
+                            :href="savedSearchesIndex()"
+                            class="block w-full cursor-pointer"
+                        >
+                            <BellRing class="mr-2 size-4" />
+                            Tìm kiếm đã lưu
                         </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem v-if="user.role !== 'user'" as-child>

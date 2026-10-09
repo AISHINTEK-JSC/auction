@@ -43,6 +43,9 @@ class UpdateListingRequest extends FormRequest
             'images.*' => ['image', 'max:5120'],
             'remove_images' => ['nullable', 'array'],
             'remove_images.*' => ['integer'],
+            // Ids of the images that stay, in the order the seller wants them; the first is the cover.
+            'image_order' => ['nullable', 'array'],
+            'image_order.*' => ['integer'],
         ];
     }
 

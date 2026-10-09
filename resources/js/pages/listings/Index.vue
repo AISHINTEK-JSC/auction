@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
+import { Bell, BellRing } from '@lucide/vue';
 import { computed, reactive } from 'vue';
 import CitySelect from '@/components/marketplace/CitySelect.vue';
 import ListingGrid from '@/components/marketplace/ListingGrid.vue';
 import Pagination from '@/components/marketplace/Pagination.vue';
+import { Button } from '@/components/ui/button';
 import { show as categoryShow } from '@/routes/categories';
 import { index } from '@/routes/listings';
+import {
+    destroy as destroySavedSearch,
+    store as storeSavedSearch,
+} from '@/routes/saved-searches';
 import { show as tagShow } from '@/routes/tags';
 import type { ListingCard, Paginated } from '@/types';
 
@@ -22,6 +28,12 @@ const props = defineProps<{
     category: { id: number; name: string; slug: string } | null;
     tag: { name: string; slug: string } | null;
     filters: Filters;
+    /** Null for guests and on tag pages, where a search cannot be saved. */
+    savedSearch: {
+        criteria: Record<string, string | number | null>;
+        can_save: boolean;
+        id: number | null;
+    } | null;
 }>();
 
 const form = reactive({ ...props.filters });
@@ -60,6 +72,22 @@ function apply() {
     );
 }
 
+function saveSearch() {
+    if (props.savedSearch) {
+        router.post(storeSavedSearch().url, props.savedSearch.criteria, {
+            preserveScroll: true,
+        });
+    }
+}
+
+function forgetSearch() {
+    if (props.savedSearch?.id) {
+        router.delete(destroySavedSearch(props.savedSearch.id).url, {
+            preserveScroll: true,
+        });
+    }
+}
+
 const selectClass = 'h-9 rounded-md border bg-background px-2 text-sm';
 </script>
 
@@ -69,9 +97,33 @@ const selectClass = 'h-9 rounded-md border bg-background px-2 text-sm';
     <div class="space-y-4">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
             <h1 class="text-2xl font-semibold">{{ title }}</h1>
-            <p class="text-sm text-muted-foreground">
-                {{ listings.total }} kết quả
-            </p>
+            <div class="flex items-center gap-3">
+                <p class="text-sm text-muted-foreground">
+                    {{ listings.total }} kết quả
+                </p>
+                <template v-if="savedSearch?.can_save">
+                    <Button
+                        v-if="savedSearch.id"
+                        variant="outline"
+                        size="sm"
+                        aria-pressed="true"
+                        @click="forgetSearch"
+                    >
+                        <BellRing class="size-4 text-amber-500" />
+                        Đang nhận tin mới
+                    </Button>
+                    <Button
+                        v-else
+                        variant="outline"
+                        size="sm"
+                        aria-pressed="false"
+                        @click="saveSearch"
+                    >
+                        <Bell class="size-4" />
+                        Báo khi có tin mới
+                    </Button>
+                </template>
+            </div>
         </div>
 
         <form

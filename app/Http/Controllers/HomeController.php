@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\AuctionStatus;
 use App\Models\Listing;
 use App\Support\ListingPresenter;
+use App\Support\Seo;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -28,6 +29,6 @@ class HomeController extends Controller
                 ->limit(10)
                 ->get()
                 ->map(fn (Listing $listing) => ListingPresenter::card($listing)),
-        ]);
+        ])->withViewData('seo', Seo::home());
     }
 }

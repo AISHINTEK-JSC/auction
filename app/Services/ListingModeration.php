@@ -21,6 +21,7 @@ class ListingModeration
         private readonly CreateListing $creator,
         private readonly ListingSyncService $sync,
         private readonly AuctionNotifier $notifier,
+        private readonly SavedSearchMatcher $savedSearches,
     ) {}
 
     /**
@@ -48,7 +49,13 @@ class ListingModeration
             $listing->ends_at = CreateListing::fixedListingDeadline();
         }
 
+        $firstPublication = $listing->moderation_status === ModerationStatus::Pending;
+
         $this->decide($listing, ModerationStatus::Approved, null);
+
+        if ($firstPublication) {
+            rescue(fn () => $this->savedSearches->listingPublished($listing));
+        }
 
         if ($listing->isAuction()) {
             rescue(fn () => $this->sync->refresh($listing), report: false);

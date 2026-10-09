@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Category;
 use App\Models\City;
+use App\Support\Captcha;
 use App\Support\NotificationPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -51,6 +52,8 @@ class HandleInertiaRequests extends Middleware
             // Header menu and filters. Closures: skipped by partial reloads that do not ask for them.
             'categories' => fn () => Category::tree(),
             'cities' => fn () => City::options(),
+            // Public key of the captcha widget; null while the captcha is off.
+            'captchaSiteKey' => Captcha::siteKey(),
             'unreadNotifications' => fn () => $request->user()?->unreadNotifications()->count() ?? 0,
             // For the dropdown under the bell. Optional: only sent when the
             // dropdown asks for it, so ordinary page loads do not pay for it.

@@ -6,6 +6,7 @@ use App\Models\Forfeit;
 use App\Models\Listing;
 use App\Models\User;
 use App\Notifications\MarketplaceNotification;
+use App\Support\MarketplaceSettings;
 use Carbon\CarbonInterface;
 
 /**
@@ -57,7 +58,7 @@ class ForfeitPenalty
     public function recentCount(User $user): int
     {
         return $user->forfeits()
-            ->where('created_at', '>=', now()->subDays((int) config('marketplace.forfeit_window_days')))
+            ->where('created_at', '>=', now()->subDays(MarketplaceSettings::forfeitWindowDays()))
             ->count();
     }
 
@@ -82,6 +83,6 @@ class ForfeitPenalty
      */
     private function bans(): array
     {
-        return array_map('intval', (array) config('marketplace.forfeit_bans', []));
+        return MarketplaceSettings::forfeitBans();
     }
 }

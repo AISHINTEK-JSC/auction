@@ -15,6 +15,8 @@ use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -23,6 +25,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
 class ListingResource extends Resource
 {
@@ -44,6 +49,16 @@ class ListingResource extends Resource
         return false;
     }
 
+    /**
+     * Drafts are private to their seller: staff never see or moderate them.
+     *
+     * @return Builder<Model>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('moderation_status', '!=', ModerationStatus::Draft);
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -62,6 +77,7 @@ class ListingResource extends Resource
                     ->formatStateUsing(fn (ModerationStatus $state) => $state->label())
                     ->color(fn (ModerationStatus $state) => match ($state) {
                         ModerationStatus::Pending => 'warning',
+                        ModerationStatus::Draft => 'gray',
                         ModerationStatus::Approved => 'success',
                         ModerationStatus::Rejected, ModerationStatus::Hidden => 'danger',
                     })
@@ -136,7 +152,61 @@ class ListingResource extends Resource
                             AdminLog::record('listing.auction_cancelled', $record, sprintf('Huỷ phiên đấu giá của tin #%d "%s"', $record->id, $record->title));
                         }, 'Đã huỷ phiên đấu giá')),
                 ]),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('approveSelected')->label('Duyệt các tin đã chọn')->icon(Heroicon::OutlinedCheckCircle)->color('success')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(fn (Collection $records) => self::approveMany($records)),
+                    BulkAction::make('hideSelected')->label('Ẩn các tin đã chọn')->icon(Heroicon::OutlinedEyeSlash)->color('danger')
+                        ->schema([Textarea::make('note')->label('Lý do (gửi cho người bán)')->required()->maxLength(255)])
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data): void {
+                            /** @var Collection<int, Listing> $records */
+                            $visible = $records->where('moderation_status', ModerationStatus::Approved);
+
+                            foreach ($visible as $listing) {
+                                app(ListingModeration::class)->hide($listing, $data['note']);
+                                $listing->reports()->whereNull('handled_at')->update(['handled_at' => now(), 'handled_by' => auth()->id()]);
+                            }
+
+                            Notification::make()->title('Đã ẩn '.$visible->count().' tin')->success()->send();
+                        }),
+                ]),
             ]);
+    }
+
+    /**
+     * Approve several listings at once. Each goes through the same checks as a
+     * single approval, so some may be refused (for instance when their end time
+     * has passed); the result says how many.
+     *
+     * @param  Collection<int, Listing>  $records
+     */
+    private static function approveMany(Collection $records): void
+    {
+        $approved = 0;
+        $failed = [];
+
+        foreach ($records as $listing) {
+            if ($listing->moderation_status === ModerationStatus::Approved) {
+                continue;
+            }
+
+            try {
+                app(ListingModeration::class)->approve($listing);
+                $approved++;
+            } catch (EngineException|DomainException $e) {
+                $failed[] = "#{$listing->id}: {$e->getMessage()}";
+            }
+        }
+
+        Notification::make()
+            ->title("Đã duyệt {$approved} tin".($failed ? ', '.count($failed).' tin không duyệt được' : ''))
+            ->body($failed ? implode("\n", $failed) : null)
+            ->{$failed ? 'warning' : 'success'}()
+            ->send();
     }
 
     public static function getPages(): array

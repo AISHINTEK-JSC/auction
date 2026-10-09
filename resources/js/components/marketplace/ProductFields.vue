@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ImagePlus, Sparkles, X } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, ImagePlus, Sparkles, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import CategorySelect from '@/components/marketplace/CategorySelect.vue';
@@ -17,6 +17,8 @@ const MAX_IMAGES = 8;
 
 /** Ids of already stored images the seller wants to drop (edit form only). */
 const removed = defineModel<number[]>('removed', { default: () => [] });
+/** Ids of the stored images that stay, in display order (edit form only). The first is the cover. */
+const order = defineModel<number[]>('order', { default: () => [] });
 
 const props = defineProps<{
     /** The parent's Inertia form; its fields are edited in place. */
@@ -29,11 +31,51 @@ const props = defineProps<{
     removable?: boolean;
 }>();
 
-const kept = computed(() =>
-    (props.existingImages ?? []).filter(
+// Stored images in the seller's order. Without an order (relisting) they are shown as stored.
+const kept = computed(() => {
+    const images = (props.existingImages ?? []).filter(
         (image) => !removed.value.includes(image.id),
-    ),
-);
+    );
+
+    if (order.value.length === 0) {
+        return images;
+    }
+
+    return [...images].sort(
+        (a, b) => order.value.indexOf(a.id) - order.value.indexOf(b.id),
+    );
+});
+
+function removeExisting(id: number) {
+    removed.value.push(id);
+    order.value = order.value.filter((kept) => kept !== id);
+}
+
+/** Swap a stored image with its neighbour. */
+function moveExisting(index: number, step: -1 | 1) {
+    const ids = kept.value.map((image) => image.id);
+    const target = index + step;
+
+    if (target < 0 || target >= ids.length) {
+        return;
+    }
+
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    order.value = ids;
+}
+
+/** Swap a newly added image with its neighbour; new images always follow the stored ones. */
+function moveNew(index: number, step: -1 | 1) {
+    const target = index + step;
+
+    if (target < 0 || target >= props.form.images.length) {
+        return;
+    }
+
+    for (const list of [props.form.images, previews.value]) {
+        [list[index], list[target]] = [list[target], list[index]] as never[];
+    }
+}
 const room = computed(
     () => MAX_IMAGES - kept.value.length - props.form.images.length,
 );
@@ -131,9 +173,12 @@ const imageError = computed(
 
         <div class="grid content-start gap-2">
             <Label>Hình ảnh (tối đa {{ MAX_IMAGES }}, mỗi ảnh ≤ 5MB)</Label>
+            <p class="text-xs text-muted-foreground">
+                Ảnh đầu tiên là ảnh bìa. Dùng mũi tên trên ảnh để đổi thứ tự.
+            </p>
             <div class="flex flex-wrap gap-2">
                 <div
-                    v-for="image in kept"
+                    v-for="(image, index) in kept"
                     :key="image.id"
                     class="relative size-24 overflow-hidden rounded-md border"
                 >
@@ -142,15 +187,43 @@ const imageError = computed(
                         alt=""
                         class="size-full object-cover"
                     />
+                    <span
+                        v-if="index === 0"
+                        class="absolute top-1 left-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground"
+                        >Ảnh bìa</span
+                    >
                     <button
                         v-if="removable"
                         type="button"
                         class="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white"
-                        aria-label="Bỏ ảnh này"
-                        @click="removed.push(image.id)"
+                        :aria-label="`Bỏ ảnh ${index + 1}`"
+                        @click="removeExisting(image.id)"
                     >
                         <X class="size-3.5" />
                     </button>
+                    <div
+                        v-if="removable && kept.length > 1"
+                        class="absolute inset-x-0 bottom-0 flex justify-between bg-black/55 text-white"
+                    >
+                        <button
+                            type="button"
+                            class="p-0.5 disabled:opacity-30"
+                            :disabled="index === 0"
+                            :aria-label="`Chuyển ảnh ${index + 1} lên trước`"
+                            @click="moveExisting(index, -1)"
+                        >
+                            <ChevronLeft class="size-4" />
+                        </button>
+                        <button
+                            type="button"
+                            class="p-0.5 disabled:opacity-30"
+                            :disabled="index === kept.length - 1"
+                            :aria-label="`Chuyển ảnh ${index + 1} ra sau`"
+                            @click="moveExisting(index, 1)"
+                        >
+                            <ChevronRight class="size-4" />
+                        </button>
+                    </div>
                 </div>
                 <div
                     v-for="(preview, index) in previews"
@@ -158,6 +231,11 @@ const imageError = computed(
                     class="relative size-24 overflow-hidden rounded-md border"
                 >
                     <img :src="preview" alt="" class="size-full object-cover" />
+                    <span
+                        v-if="index === 0 && kept.length === 0"
+                        class="absolute top-1 left-1 rounded bg-primary px-1 text-[10px] font-medium text-primary-foreground"
+                        >Ảnh bìa</span
+                    >
                     <button
                         type="button"
                         class="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white"
@@ -166,6 +244,29 @@ const imageError = computed(
                     >
                         <X class="size-3.5" />
                     </button>
+                    <div
+                        v-if="previews.length > 1"
+                        class="absolute inset-x-0 bottom-0 flex justify-between bg-black/55 text-white"
+                    >
+                        <button
+                            type="button"
+                            class="p-0.5 disabled:opacity-30"
+                            :disabled="index === 0"
+                            :aria-label="`Chuyển ảnh mới ${index + 1} lên trước`"
+                            @click="moveNew(index, -1)"
+                        >
+                            <ChevronLeft class="size-4" />
+                        </button>
+                        <button
+                            type="button"
+                            class="p-0.5 disabled:opacity-30"
+                            :disabled="index === previews.length - 1"
+                            :aria-label="`Chuyển ảnh mới ${index + 1} ra sau`"
+                            @click="moveNew(index, 1)"
+                        >
+                            <ChevronRight class="size-4" />
+                        </button>
+                    </div>
                 </div>
                 <label
                     v-if="room > 0"

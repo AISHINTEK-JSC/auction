@@ -83,6 +83,7 @@ class ListingPresenter
                 'settle' => $settles,
                 'cancel' => $viewer !== null && $viewer->can('cancel', $listing),
                 'mark_sold' => $viewer !== null && $viewer->can('markSold', $listing),
+                'renew' => $viewer !== null && $viewer->can('renew', $listing),
             ],
             'contact' => self::contactFor($listing, $viewer, $settles),
             'my_review' => $settles

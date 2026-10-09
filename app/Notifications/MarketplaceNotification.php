@@ -83,10 +83,19 @@ class MarketplaceNotification extends Notification
         ), self::listingUrl($listing));
     }
 
+    public static function expiringSoon(Listing $listing): self
+    {
+        return new self('expiring', 'Tin đăng của bạn sắp hết hạn', sprintf(
+            'Tin "%s" sẽ hết hạn lúc %s. Bấm "Gia hạn" ở trang tin để tiếp tục hiển thị.',
+            $listing->title,
+            $listing->ends_at?->format('H:i d/m/Y'),
+        ), self::listingUrl($listing));
+    }
+
     public static function expired(Listing $listing): self
     {
         return new self('expired', 'Tin đăng của bạn đã hết hạn', sprintf(
-            'Tin "%s" đã hết thời gian hiển thị. Bạn có thể đăng lại từ trang tin đăng của tôi.',
+            'Tin "%s" đã hết thời gian hiển thị. Bạn có thể gia hạn hoặc đăng lại từ trang tin đăng của tôi.',
             $listing->title,
         ), route('dashboard', absolute: false));
     }

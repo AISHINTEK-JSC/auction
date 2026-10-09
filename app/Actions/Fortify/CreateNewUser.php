@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Models\BlockedEmailDomain;
 use App\Models\BlockedIp;
 use App\Models\User;
+use App\Rules\PassesCaptcha;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -26,7 +27,8 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
-        ])->after(function (ValidatorContract $validator) use ($input): void {
+            ...PassesCaptcha::rules(),
+        ], PassesCaptcha::messages())->after(function (ValidatorContract $validator) use ($input): void {
             if ($this->registrationIsBlocked((string) ($input['email'] ?? ''))) {
                 $validator->errors()->add('email', 'Không thể đăng ký bằng email hoặc địa chỉ mạng này.');
             }

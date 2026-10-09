@@ -35,6 +35,13 @@ return [
         ],
     ],
 
+    // Cloudflare Turnstile: the captcha on registration and on posting a listing.
+    // Leave both empty to turn the captcha off.
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
     'auction_engine' => [
         'url' => env('AUCTION_ENGINE_URL', 'http://localhost:8801/api/v1'),
         'token' => env('AUCTION_ENGINE_TOKEN'),
