@@ -25,6 +25,9 @@ class UnlockRequestResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Yêu cầu mở khoá';
 
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'Yêu cầu mở khoá';
+
     protected static ?int $navigationSort = 5;
 
     public static function canCreate(): bool

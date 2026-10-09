@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
             // Header menu and filters. Closures: skipped by partial reloads that do not ask for them.
             'categories' => fn () => Category::tree(),
             'cities' => fn () => City::options(),
+            'unreadNotifications' => fn () => $request->user()?->unreadNotifications()->count() ?? 0,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

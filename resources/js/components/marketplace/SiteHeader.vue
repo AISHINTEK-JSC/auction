@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
+    Bell,
     ChevronDown,
     Gavel,
+    Gift,
     LayoutGrid,
     Menu,
     Plus,
@@ -32,12 +34,15 @@ import { useAuthUser } from '@/composables/useAuthUser';
 import { getInitials } from '@/composables/useInitials';
 import { dashboard, home, login, register } from '@/routes';
 import { show as categoryShow } from '@/routes/categories';
+import { index as giveawaysIndex } from '@/routes/giveaways';
 import { create, index } from '@/routes/listings';
+import { index as notificationsIndex } from '@/routes/notifications';
 
 const page = usePage();
 const user = useAuthUser();
 const categories = computed(() => page.props.categories);
 const cities = computed(() => page.props.cities);
+const unread = computed(() => page.props.unreadNotifications ?? 0);
 
 const query = new URLSearchParams(page.url.split('?')[1] ?? '');
 const term = ref(query.get('q') ?? '');
@@ -75,6 +80,13 @@ function search() {
                         <SheetTitle>Danh mục</SheetTitle>
                     </SheetHeader>
                     <nav class="mt-4 flex flex-col gap-4 text-sm">
+                        <Link
+                            :href="giveawaysIndex()"
+                            class="flex items-center gap-2 font-medium hover:underline"
+                        >
+                            <Gift class="size-4" />
+                            Quà tặng
+                        </Link>
                         <div v-for="category in categories" :key="category.id">
                             <Link
                                 :href="categoryShow(category.slug)"
@@ -149,6 +161,29 @@ function search() {
                 </Link>
             </Button>
 
+            <Button
+                v-if="user"
+                variant="ghost"
+                size="icon"
+                class="relative size-9 shrink-0"
+                as-child
+            >
+                <Link
+                    :href="notificationsIndex()"
+                    :aria-label="
+                        unread ? `Thông báo, ${unread} chưa đọc` : 'Thông báo'
+                    "
+                >
+                    <Bell class="size-5" />
+                    <span
+                        v-if="unread"
+                        class="absolute -top-0.5 -right-0.5 flex min-w-4.5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-4.5 font-semibold text-white"
+                    >
+                        {{ unread > 99 ? '99+' : unread }}
+                    </span>
+                </Link>
+            </Button>
+
             <DropdownMenu v-if="user">
                 <DropdownMenuTrigger as-child>
                     <Button
@@ -179,7 +214,7 @@ function search() {
                             Phiên đấu giá của tôi
                         </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem v-if="user.is_admin" as-child>
+                    <DropdownMenuItem v-if="user.role !== 'user'" as-child>
                         <a href="/admin" class="block w-full cursor-pointer">
                             <Shield class="mr-2 size-4" />
                             Quản trị
@@ -234,6 +269,15 @@ function search() {
                             </Link>
                         </li>
                     </ul>
+                </li>
+                <li class="ml-auto">
+                    <Link
+                        :href="giveawaysIndex()"
+                        class="flex items-center gap-1.5 px-3 py-2 font-medium hover:text-primary"
+                    >
+                        <Gift class="size-4" />
+                        Quà tặng
+                    </Link>
                 </li>
             </ul>
         </nav>

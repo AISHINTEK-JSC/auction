@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BlockedEmailDomains;
 
+use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\BlockedEmailDomains\Pages\ManageBlockedEmailDomains;
 use App\Models\BlockedEmailDomain;
 use BackedEnum;
@@ -19,6 +20,8 @@ use Filament\Tables\Table;
  */
 class BlockedEmailDomainResource extends Resource
 {
+    use AdminOnly;
+
     protected static ?string $model = BlockedEmailDomain::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAtSymbol;
@@ -26,6 +29,9 @@ class BlockedEmailDomainResource extends Resource
     protected static ?string $modelLabel = 'tên miền email bị chặn';
 
     protected static ?string $pluralModelLabel = 'Tên miền email bị chặn';
+
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'Tên miền email bị chặn';
 
     protected static ?int $navigationSort = 7;
 

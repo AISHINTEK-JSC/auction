@@ -45,6 +45,18 @@ export type ListingCard = {
     ends_at: string | null;
     winner: string | null;
     winning_price: number | null;
+    /** False while the listing waits for approval: it has no detail page yet. */
+    has_auction: boolean;
+    leader_id: number | null;
+    moderation: 'pending' | 'approved' | 'rejected' | 'hidden';
+    moderation_label: string;
+    moderation_note: string | null;
+};
+
+/** A card on "my auctions", with what the member may do to it. */
+export type DashboardCard = ListingCard & {
+    leading: boolean;
+    can: { edit: boolean; cancel: boolean; relist: boolean };
 };
 
 export type Seller = {
@@ -56,6 +68,25 @@ export type Seller = {
     has_address: boolean;
     listing_count: number;
     sold_count: number;
+    /** Average of received reviews, 0 when there are none. */
+    rating: number;
+    review_count: number;
+};
+
+export type Contact = {
+    name: string;
+    email: string;
+    phone: string | null;
+    address: string | null;
+};
+
+export type ReviewItem = {
+    id: number;
+    rating: number;
+    comment: string | null;
+    created_at: string | null;
+    reviewer: string | null;
+    listing: string | null;
 };
 
 export type ListingDetail = ListingCard & {
@@ -63,7 +94,7 @@ export type ListingDetail = ListingCard & {
     condition: string;
     images: string[];
     category: { name: string; slug: string } | null;
-    tags: string[];
+    tags: { name: string; slug: string }[];
     auction_type_label: string;
     start_price: number;
     min_bid_price: number | null;
@@ -73,7 +104,14 @@ export type ListingDetail = ListingCard & {
     finish_price: number | null;
     created_at: string | null;
     is_owner: boolean;
+    is_winner: boolean;
     seller: Seller;
+    watching: boolean;
+    watcher_count: number;
+    can: { edit: boolean; settle: boolean };
+    /** The other side's contact details; only for the seller and the winner of a finished auction. */
+    contact: Contact | null;
+    my_review: ReviewItem | null;
 };
 
 /** Live engine state; the detail page polls it. */
@@ -96,6 +134,48 @@ export type Bid = {
     current_price: number;
     type: number;
     time: string;
+    mine: boolean;
+    can_cancel: boolean;
+};
+
+export type Giveaway = {
+    id: number;
+    title: string;
+    prize: string;
+    image: string | null;
+    winner_count: number;
+    entry_count: number;
+    ends_at: string;
+    drawn_at: string | null;
+    /** Still taking entries. */
+    open: boolean;
+    joined: boolean;
+    won: boolean;
+};
+
+export type NotificationItem = {
+    id: string;
+    kind: string;
+    title: string;
+    body: string;
+    read: boolean;
+    created_at: string | null;
+};
+
+/** What the product part of the create and edit forms works on. */
+export type ProductFormFields = {
+    title: string;
+    description: string;
+    category_id: number | null;
+    city_id: number | null;
+    condition: string;
+    images: File[];
+    tags: string[];
+};
+
+export type EditableListing = Omit<ProductFormFields, 'images'> & {
+    id: number;
+    images: { id: number; url: string }[];
 };
 
 export type CommentItem = {

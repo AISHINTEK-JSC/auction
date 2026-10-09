@@ -71,6 +71,13 @@ function uploadAvatar(event: Event) {
                     @change="uploadAvatar"
                 />
                 <p class="text-xs text-muted-foreground">Ảnh ≤ 2MB.</p>
+                <p class="text-xs text-muted-foreground">
+                    Mã số thành viên:
+                    <span class="font-mono font-semibold text-foreground">{{
+                        user.member_code
+                    }}</span>
+                    (dùng để tham gia quà tặng, không thay đổi)
+                </p>
                 <InputError :message="page.props.errors?.avatar" />
             </div>
         </div>

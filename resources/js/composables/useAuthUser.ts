@@ -9,5 +9,8 @@ import type { User } from '@/types';
 export function useAuthUser() {
     const page = usePage();
 
-    return computed(() => (page.props.auth.user as User | null) ?? null);
+    // Error pages can be rendered before the shared props exist.
+    return computed(
+        () => (page.props.auth?.user as User | null | undefined) ?? null,
+    );
 }

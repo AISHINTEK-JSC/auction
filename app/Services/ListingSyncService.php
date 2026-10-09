@@ -20,7 +20,10 @@ class ListingSyncService
 {
     private const LIVE_TTL_SECONDS = 3;
 
-    public function __construct(private readonly AuctionEngineClient $engine) {}
+    public function __construct(
+        private readonly AuctionEngineClient $engine,
+        private readonly AuctionNotifier $notifier,
+    ) {}
 
     /**
      * Current engine state for the detail page. Falls back to the snapshot when
@@ -121,6 +124,11 @@ class ListingSyncService
         $listing->bid_count = (int) ($auction['bid_number'] ?? $listing->bid_count);
         $listing->synced_at = now();
 
+        // Only the detail endpoint reports the leader; list summaries leave it as it was.
+        if (array_key_exists('highest_bidder_id', $auction)) {
+            $listing->leader_id = $auction['highest_bidder_id'] === null ? null : (int) $auction['highest_bidder_id'];
+        }
+
         if ($status === AuctionStatus::Running && isset($auction['remaining_time'])) {
             // end_time does not move when an ascending auction is extended; remaining_time does.
             $listing->ends_at = now()->addSeconds((int) $auction['remaining_time']);
@@ -143,6 +151,10 @@ class ListingSyncService
         }
 
         $listing->save();
+
+        if (! $status->isOpen() && $listing->closed_notified_at === null) {
+            $this->notifier->closed($listing);
+        }
     }
 
     /**

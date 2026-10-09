@@ -4,18 +4,19 @@ namespace App\Actions\Listings;
 
 use App\Enums\AuctionStatus;
 use App\Enums\AuctionType;
+use App\Enums\ModerationStatus;
 use App\Models\Listing;
+use App\Models\Setting;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
+use App\Support\HtmlCleaner;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
-use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 use Throwable;
 
 class CreateListing
@@ -25,33 +26,40 @@ class CreateListing
     public function __construct(private readonly AuctionEngineClient $engine) {}
 
     /**
-     * Store the listing with its images and tags, then open its auction in the engine.
-     * If the engine refuses, nothing is kept: the transaction rolls back and the
-     * uploaded files are removed.
+     * Store the listing with its images and tags, then open its auction in the
+     * engine. If the engine refuses, nothing is kept: the transaction rolls back
+     * and the stored files are removed.
+     *
+     * When moderators approve listings first, the auction is not opened here:
+     * the listing waits as "pending" and ListingModeration opens it on approval.
      *
      * @param  array<string, mixed>  $data  validated StoreListingRequest input
      * @param  list<UploadedFile>  $images
+     * @param  Listing|null  $source  a finished listing being put up again; its images are copied
      *
      * @throws EngineException
      */
-    public function handle(User $seller, array $data, array $images): Listing
+    public function handle(User $seller, array $data, array $images, ?Listing $source = null): Listing
     {
         $type = AuctionType::from((int) $data['auction_type']);
         $startTime = isset($data['start_time']) ? Carbon::parse($data['start_time']) : null;
         $endTime = $type === AuctionType::Up ? Carbon::parse($data['end_time']) : null;
+        $needsApproval = self::approvalRequired() && ! $seller->isStaff();
 
         $storedPaths = [];
         $auctionId = null;
 
         try {
-            return DB::transaction(function () use ($seller, $data, $images, $type, $startTime, $endTime, &$storedPaths, &$auctionId) {
+            return DB::transaction(function () use ($seller, $data, $images, $source, $type, $startTime, $endTime, $needsApproval, &$storedPaths, &$auctionId) {
                 $listing = Listing::query()->create([
                     'user_id' => $seller->id,
                     'category_id' => $data['category_id'],
                     'city_id' => $data['city_id'],
                     'title' => $data['title'],
-                    'description' => $this->sanitize($data['description'] ?? null),
+                    'description' => HtmlCleaner::clean($data['description'] ?? null),
                     'condition' => $data['condition'],
+                    'moderation_status' => $needsApproval ? ModerationStatus::Pending : ModerationStatus::Approved,
+                    'relisted_from_id' => $source?->id,
                     'auction_type' => $type,
                     'start_price' => $data['start_price'],
                     'min_bid_price' => $type === AuctionType::Up ? ($data['min_bid_price'] ?? null) : null,
@@ -66,18 +74,27 @@ class CreateListing
                     'ends_at' => $endTime,
                 ]);
 
-                foreach ($images as $position => $image) {
-                    $storedPaths[] = $path = $image->store("listings/{$listing->id}", 'public');
-                    $listing->images()->create(['path' => $path, 'position' => $position]);
+                $position = 0;
+
+                foreach ($source->images ?? [] as $image) {
+                    $path = "listings/{$listing->id}/".basename($image->path);
+
+                    if (Storage::disk('public')->copy($image->path, $path)) {
+                        $storedPaths[] = $path;
+                        $listing->images()->create(['path' => $path, 'position' => $position++]);
+                    }
                 }
 
-                $listing->tags()->sync($this->tagIds($data['tags'] ?? []));
+                foreach ($images as $image) {
+                    $storedPaths[] = $path = $image->store("listings/{$listing->id}", 'public');
+                    $listing->images()->create(['path' => $path, 'position' => $position++]);
+                }
 
-                $auction = $this->engine->createAuction($this->enginePayload($listing));
-                $auctionId = (int) $auction['auction_id'];
+                $listing->tags()->sync(self::tagIds($data['tags'] ?? []));
 
-                $listing->auction_id = $auctionId;
-                $listing->save();
+                if (! $needsApproval) {
+                    $auctionId = $this->openAuction($listing);
+                }
 
                 return $listing;
             });
@@ -91,6 +108,43 @@ class CreateListing
 
             throw $e;
         }
+    }
+
+    /**
+     * Create the listing's auction in the engine and link it.
+     *
+     * @throws EngineException
+     */
+    public function openAuction(Listing $listing): int
+    {
+        $auction = $this->engine->createAuction($this->enginePayload($listing));
+
+        $listing->auction_id = (int) $auction['auction_id'];
+        $listing->save();
+
+        return $listing->auction_id;
+    }
+
+    public static function approvalRequired(): bool
+    {
+        return (bool) Setting::read(Setting::LISTING_APPROVAL, false);
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return list<int>
+     */
+    public static function tagIds(array $names): array
+    {
+        return array_values(collect($names)
+            ->map(fn (string $name) => trim($name))
+            ->filter()
+            ->unique(fn (string $name) => Str::slug($name))
+            ->map(fn (string $name) => Tag::query()->firstOrCreate(
+                ['slug' => Str::slug($name)],
+                ['name' => $name],
+            )->id)
+            ->all());
     }
 
     /**
@@ -123,38 +177,5 @@ class CreateListing
         }
 
         return array_filter($payload, fn ($value) => $value !== null);
-    }
-
-    /**
-     * @param  list<string>  $names
-     * @return list<int>
-     */
-    private function tagIds(array $names): array
-    {
-        return array_values(collect($names)
-            ->map(fn (string $name) => trim($name))
-            ->filter()
-            ->unique(fn (string $name) => Str::slug($name))
-            ->map(fn (string $name) => Tag::query()->firstOrCreate(
-                ['slug' => Str::slug($name)],
-                ['name' => $name],
-            )->id)
-            ->all());
-    }
-
-    /**
-     * The description is rich text from the editor and is rendered with v-html.
-     */
-    private function sanitize(?string $html): ?string
-    {
-        if ($html === null || trim($html) === '') {
-            return null;
-        }
-
-        $sanitizer = new HtmlSanitizer(
-            (new HtmlSanitizerConfig)->allowSafeElements()->withMaxInputLength(50_000),
-        );
-
-        return $sanitizer->sanitize($html);
     }
 }

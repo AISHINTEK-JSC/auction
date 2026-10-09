@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Categories;
 
+use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Categories\Pages\ManageCategories;
 use App\Models\Category;
 use BackedEnum;
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class CategoryResource extends Resource
 {
+    use AdminOnly;
+
     protected static ?string $model = Category::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
@@ -25,6 +28,9 @@ class CategoryResource extends Resource
     protected static ?string $modelLabel = 'danh mục';
 
     protected static ?string $pluralModelLabel = 'Danh mục';
+
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'Danh mục';
 
     protected static ?int $navigationSort = 3;
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -27,7 +29,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $phone
  * @property string|null $address
  * @property string|null $avatar_path
- * @property bool $is_admin
+ * @property UserRole $role
+ * @property string|null $member_code
  * @property Carbon|null $blocked_at
  * @property string|null $block_reason
  * @property-read string|null $avatar
@@ -59,7 +62,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
-            'is_admin' => 'boolean',
+            'role' => UserRole::class,
             'blocked_at' => 'datetime',
         ];
     }
@@ -87,8 +90,67 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
         return $this->blocked_at !== null;
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::Admin;
+    }
+
+    /**
+     * Admins and moderators: the people allowed into the admin panel.
+     */
+    public function isStaff(): bool
+    {
+        return $this->role === UserRole::Admin || $this->role === UserRole::Moderator;
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_admin && ! $this->isBlocked();
+        return $this->isStaff() && ! $this->isBlocked();
+    }
+
+    /**
+     * Every member gets a number once, at sign-up, and keeps it for good. It is
+     * what they take part in giveaways with.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $user): void {
+            $user->member_code ??= self::newMemberCode();
+        });
+    }
+
+    public static function newMemberCode(): string
+    {
+        do {
+            $code = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
+        } while (self::query()->where('member_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * @return BelongsToMany<Listing, $this>
+     */
+    public function watchedListings(): BelongsToMany
+    {
+        return $this->belongsToMany(Listing::class, 'listing_watchers');
+    }
+
+    /**
+     * Listings this member has bid on.
+     *
+     * @return BelongsToMany<Listing, $this>
+     */
+    public function bidListings(): BelongsToMany
+    {
+        return $this->belongsToMany(Listing::class, 'listing_bidders')->withPivot('last_bid_price')->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<Review, $this>
+     */
+    public function reviewsReceived(): HasMany
+    {
+        return $this->hasMany(Review::class, 'reviewee_id');
     }
 }

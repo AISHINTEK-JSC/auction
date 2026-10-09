@@ -26,7 +26,8 @@ const form = useForm<{ bid_type: number; bid_price: number | '' }>({
     bid_price: '',
 });
 
-// Same rule as the engine (AuctionModel::computeAlpha): the step grows with the price.
+// Same rule as the engine (AuctionModel::computeAlpha). The engine only applies it
+// to quick bids; a typed bid just has to beat the current price.
 const step = computed(() => {
     const digits = String(props.auction.current_price).length;
 
@@ -39,7 +40,7 @@ const hint = computed(() => {
     }
 
     return props.auction.bid_count > 0
-        ? `Giá đặt phải cao hơn ${formatVnd(props.auction.current_price)} (bước giá tối thiểu ${formatVnd(step.value)}).`
+        ? `Giá đặt phải cao hơn ${formatVnd(props.auction.current_price)}.`
         : `Giá đặt tối thiểu ${formatVnd(props.auction.current_price)}.`;
 });
 
@@ -89,7 +90,10 @@ function submit(type: number) {
             <InputError :message="form.errors.bid_price" />
         </div>
 
+        <!-- With no bids yet, a quick bid on an ascending auction is placed at the
+             seller's hidden reserve price, so the buyer could not know the amount. -->
         <Button
+            v-if="isDown || auction.bid_count > 0"
             type="button"
             variant="outline"
             class="w-full"
@@ -99,7 +103,7 @@ function submit(type: number) {
             <template v-if="isDown">
                 Mua ngay với giá {{ formatVnd(auction.current_price) }}
             </template>
-            <template v-else>Đặt nhanh mức giá kế tiếp</template>
+            <template v-else>Đặt nhanh +{{ formatVnd(step) }}</template>
         </Button>
     </form>
 </template>

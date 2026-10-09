@@ -85,6 +85,37 @@ class AuctionEngineClient
     }
 
     /**
+     * Withdraw a bid from a running auction. The engine identifies a bid by its
+     * bidder and price, not by an id.
+     *
+     * @return array<string, mixed>
+     */
+    public function cancelBid(int $auctionId, int $bidderId, int $bidPrice): array
+    {
+        return $this->send('put', 'bid/cancel-in-auction', [
+            'auction_id' => $auctionId,
+            'bidder_id' => $bidderId,
+            'bid_price' => $bidPrice,
+        ]);
+    }
+
+    /**
+     * The winner of a finished auction backs out. All their bids are cancelled
+     * and the next highest bidder, if any, becomes the winner; otherwise the
+     * engine cancels the auction.
+     *
+     * @return array<string, mixed> auction_id, plus has_bid_successor and bid{bidder_id, bid_price} when the winner changed
+     */
+    public function withdrawWinner(int $auctionId, int $bidderId, int $bidPrice): array
+    {
+        return $this->send('put', 'bid/cancel-end-auction', [
+            'auction_id' => $auctionId,
+            'bidder_id' => $bidderId,
+            'bid_price' => $bidPrice,
+        ]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function cancelAuction(int $auctionId): array

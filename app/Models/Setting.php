@@ -17,6 +17,9 @@ class Setting extends Model
 {
     public const PASSWORD_POLICY = 'password_policy';
 
+    /** When true, new listings wait for a moderator before they go live. */
+    public const LISTING_APPROVAL = 'listing_approval';
+
     protected $primaryKey = 'key';
 
     protected $keyType = 'string';

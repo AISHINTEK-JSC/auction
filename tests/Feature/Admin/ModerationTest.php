@@ -2,12 +2,17 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Enums\AuctionStatus;
+use App\Enums\ModerationStatus;
+use App\Filament\Widgets\MarketplaceStats;
 use App\Models\BlockedEmailDomain;
 use App\Models\BlockedIp;
+use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\UnlockRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class ModerationTest extends TestCase
@@ -35,22 +40,50 @@ class ModerationTest extends TestCase
 
         $this->actingAs(User::factory()->create())->get('/admin')->assertForbidden();
 
-        $admin = User::factory()->create();
-        $admin->forceFill(['is_admin' => true])->save();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->get('/admin')->assertOk();
 
-        foreach (['users', 'listings', 'categories', 'comments', 'unlock-requests', 'blocked-ips', 'blocked-email-domains'] as $resource) {
+        foreach (['users', 'listings', 'reports', 'categories', 'comments', 'unlock-requests', 'blocked-ips', 'blocked-email-domains', 'giveaways'] as $resource) {
             $this->actingAs($admin)->get("/admin/{$resource}")->assertOk();
         }
     }
 
-    public function test_is_admin_cannot_be_mass_assigned(): void
+    public function test_moderators_get_the_review_tools_but_not_the_admin_ones(): void
+    {
+        $moderator = User::factory()->moderator()->create();
+
+        foreach (['', '/listings', '/reports', '/comments', '/unlock-requests'] as $path) {
+            $this->actingAs($moderator)->get("/admin{$path}")->assertOk();
+        }
+
+        foreach (['/users', '/categories', '/blocked-ips', '/blocked-email-domains', '/giveaways'] as $path) {
+            $this->actingAs($moderator)->get("/admin{$path}")->assertForbidden();
+        }
+    }
+
+    public function test_the_dashboard_statistics_count_auctions_revenue_and_new_members(): void
+    {
+        $winner = User::factory()->create();
+        Listing::factory()->create();
+        Listing::factory()->status(AuctionStatus::Completed)->create(['winner_id' => $winner->id, 'winning_price' => 1_500_000]);
+        Listing::factory()->status(AuctionStatus::Completed)->create(['winner_id' => $winner->id, 'winning_price' => 500_000]);
+        Listing::factory()->create(['auction_id' => null, 'moderation_status' => ModerationStatus::Pending]);
+
+        Livewire::actingAs(User::factory()->admin()->create())
+            ->test(MarketplaceStats::class)
+            ->assertSee('Phiên đấu giá')
+            ->assertSee('2.000.000 đ')
+            ->assertSee('1 đang diễn ra')
+            ->assertSee('Tin chờ duyệt');
+    }
+
+    public function test_role_cannot_be_mass_assigned(): void
     {
         $user = User::factory()->create();
-        $user->update(['is_admin' => true]);
+        $user->update(['role' => 'admin']);
 
-        $this->assertFalse($user->refresh()->is_admin);
+        $this->assertFalse($user->refresh()->isStaff());
     }
 
     public function test_registration_is_refused_for_a_blocked_email_domain(): void

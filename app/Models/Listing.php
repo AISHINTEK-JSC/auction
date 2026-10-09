@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AuctionStatus;
 use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
+use App\Enums\ModerationStatus;
 use Carbon\CarbonInterface;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -27,6 +28,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $title
  * @property string|null $description
  * @property ItemCondition $condition
+ * @property ModerationStatus $moderation_status
+ * @property string|null $moderation_note
+ * @property int|null $relisted_from_id
  * @property int|null $auction_id
  * @property AuctionType $auction_type
  * @property int $start_price
@@ -40,14 +44,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property AuctionStatus $auction_status
  * @property int $current_price
  * @property int $bid_count
+ * @property int|null $leader_id
  * @property CarbonInterface|null $ends_at
  * @property int|null $winner_id
  * @property int|null $winning_price
  * @property CarbonInterface|null $synced_at
+ * @property CarbonInterface|null $closed_notified_at
  * @property CarbonInterface|null $created_at
  */
 #[Fillable([
     'user_id', 'category_id', 'city_id', 'title', 'description', 'condition',
+    'moderation_status', 'moderation_note', 'relisted_from_id', 'leader_id', 'closed_notified_at',
     'auction_id', 'auction_type', 'start_price', 'min_bid_price', 'start_time', 'end_time',
     'auto_extend', 'down_time', 'down_price', 'finish_price',
     'auction_status', 'current_price', 'bid_count', 'ends_at', 'winner_id', 'winning_price', 'synced_at',
@@ -64,6 +71,8 @@ class Listing extends Model
     {
         return [
             'condition' => ItemCondition::class,
+            'moderation_status' => ModerationStatus::class,
+            'closed_notified_at' => 'datetime',
             'auction_type' => AuctionType::class,
             'auction_status' => AuctionStatus::class,
             'start_time' => 'datetime',
@@ -131,14 +140,53 @@ class Listing extends Model
     }
 
     /**
-     * Listings that made it into the engine. A listing without an auction_id is a
-     * leftover of a failed create and must never be shown.
-     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function watchers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'listing_watchers');
+    }
+
+    /**
+     * @return BelongsToMany<User, $this>
+     */
+    public function bidders(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'listing_bidders')->withPivot('last_bid_price')->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<Review, $this>
+     */
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
+     * @return HasMany<ListingReport, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(ListingReport::class);
+    }
+
+    /**
+     * Visible to everyone: approved by moderation and live in the engine. A
+     * listing without an auction_id is either waiting for approval or the
+     * leftover of a failed create.
+     */
+    public function isPublished(): bool
+    {
+        return $this->auction_id !== null && $this->moderation_status === ModerationStatus::Approved;
+    }
+
+    /**
      * @param  Builder<Listing>  $query
      */
     public function scopePublished(Builder $query): void
     {
-        $query->whereNotNull('auction_id');
+        $query->whereNotNull('auction_id')->where('moderation_status', ModerationStatus::Approved);
     }
 
     /**

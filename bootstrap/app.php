@@ -10,6 +10,8 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -37,4 +39,28 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // Our own error page for the marketplace. The admin panel, the engine's
+        // webhook and JSON clients keep Laravel's default responses, and so does
+        // a 500 while debugging, where the stack trace is the useful thing.
+        $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
+            $status = $response->getStatusCode();
+
+            if ($request->is('admin', 'admin/*', 'livewire/*', 'webhooks/*', 'up')
+                || ($request->expectsJson() && ! $request->hasHeader('X-Inertia'))) {
+                return $response;
+            }
+
+            if ($status === 419) {
+                return back()->with('status', 'Phiên làm việc đã hết hạn. Vui lòng thử lại.');
+            }
+
+            if (in_array($status, [403, 404, 429, 503], true) || ($status === 500 && ! config('app.debug'))) {
+                return Inertia::render('ErrorPage', ['status' => $status])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            }
+
+            return $response;
+        });
     })->create();

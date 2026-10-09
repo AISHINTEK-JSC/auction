@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -19,7 +20,7 @@ class DatabaseSeeder extends Seeder
         // Local accounts, password "password". Change it before exposing the app.
         if (! User::query()->where('email', 'admin@example.com')->exists()) {
             User::factory()->create(['name' => 'Quản trị', 'email' => 'admin@example.com'])
-                ->forceFill(['is_admin' => true])
+                ->forceFill(['role' => UserRole::Admin])
                 ->save();
         }
 

@@ -22,6 +22,7 @@ declare module '@inertiajs/core' {
             auth: Auth;
             categories: CategoryNode[];
             cities: CityOption[];
+            unreadNotifications: number;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

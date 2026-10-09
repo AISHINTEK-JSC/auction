@@ -68,8 +68,7 @@ class CommentTest extends TestCase
             ->delete(route('comments.destroy', $comment))
             ->assertForbidden();
 
-        $admin = User::factory()->create();
-        $admin->forceFill(['is_admin' => true])->save();
+        $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->delete(route('comments.destroy', $comment))->assertRedirect();
         $this->assertDatabaseCount('comments', 0);

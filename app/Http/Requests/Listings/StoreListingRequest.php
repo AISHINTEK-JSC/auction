@@ -4,6 +4,7 @@ namespace App\Http\Requests\Listings;
 
 use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
+use App\Models\Listing;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -17,20 +18,33 @@ use Illuminate\Validation\Validator;
 class StoreListingRequest extends FormRequest
 {
     /**
+     * The finished listing being put up again, if any. Its images are reused,
+     * so uploading new ones becomes optional.
+     */
+    public function source(): ?Listing
+    {
+        $id = $this->integer('relist_from');
+
+        return $id > 0 ? Listing::query()->with('images')->find($id) : null;
+    }
+
+    /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         $up = AuctionType::Up->value;
         $down = AuctionType::Down->value;
+        $reused = $this->source()?->images->count() ?? 0;
 
         return [
+            'relist_from' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:50000'],
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'city_id' => ['required', 'integer', Rule::exists('cities', 'id')],
             'condition' => ['required', Rule::enum(ItemCondition::class)],
-            'images' => ['required', 'array', 'min:1', 'max:8'],
+            'images' => [$reused > 0 ? 'nullable' : 'required', 'array', 'max:'.max(0, 8 - $reused)],
             'images.*' => ['image', 'max:5120'],
             'tags' => ['nullable', 'array', 'max:5'],
             'tags.*' => ['string', 'max:30'],
@@ -56,6 +70,12 @@ class StoreListingRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
+                $source = $this->source();
+
+                if ($this->filled('relist_from') && ($source === null || $this->user()->cannot('relist', $source))) {
+                    $validator->errors()->add('relist_from', 'Không thể đăng lại tin này.');
+                }
+
                 if ($validator->errors()->isNotEmpty() || (int) $this->input('auction_type') !== AuctionType::Up->value) {
                     return;
                 }

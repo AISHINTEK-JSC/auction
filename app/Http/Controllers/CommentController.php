@@ -13,7 +13,7 @@ class CommentController extends Controller
 {
     public function store(StoreCommentRequest $request, Listing $listing): RedirectResponse
     {
-        abort_if($listing->auction_id === null, 404);
+        abort_unless($listing->isPublished(), 404);
 
         $listing->comments()->create([
             'user_id' => $request->user()->id,

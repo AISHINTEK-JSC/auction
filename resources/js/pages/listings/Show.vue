@@ -12,13 +12,21 @@ import { computed, ref, watch } from 'vue';
 import BidPanel from '@/components/marketplace/BidPanel.vue';
 import CommentThread from '@/components/marketplace/CommentThread.vue';
 import Countdown from '@/components/marketplace/Countdown.vue';
+import ListingActions from '@/components/marketplace/ListingActions.vue';
 import ListingGrid from '@/components/marketplace/ListingGrid.vue';
+import SettlementPanel from '@/components/marketplace/SettlementPanel.vue';
+import StarRating from '@/components/marketplace/StarRating.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getInitials } from '@/composables/useInitials';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { show as categoryShow } from '@/routes/categories';
-import { index as bidsIndex } from '@/routes/listings/bids';
+import {
+    destroy as cancelBidRoute,
+    index as bidsIndex,
+} from '@/routes/listings/bids';
+import { show as tagShow } from '@/routes/tags';
+import { show as userShow } from '@/routes/users';
 import { AuctionStatus, AuctionType } from '@/types';
 import type {
     AuctionState,
@@ -33,6 +41,7 @@ const props = defineProps<{
     auction: AuctionState;
     bids: Bid[];
     comments: CommentItem[];
+    reportReasons: { value: string; label: string }[];
     sameSeller: ListingCard[];
     related: ListingCard[];
 }>();
@@ -62,10 +71,31 @@ watch(
     },
     { immediate: true },
 );
+
+function cancelBid(bid: Bid) {
+    if (window.confirm(`Huỷ lượt đặt giá ${formatVnd(bid.price)} của bạn?`)) {
+        router.delete(cancelBidRoute(props.listing.id).url, {
+            data: { bid_price: bid.price },
+            preserveScroll: true,
+        });
+    }
+}
 </script>
 
 <template>
     <Head :title="listing.title" />
+
+    <p
+        v-if="listing.moderation !== 'approved'"
+        class="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm"
+        role="status"
+    >
+        Tin này {{ listing.moderation_label.toLowerCase() }} và không hiển thị
+        với người khác.
+        <template v-if="listing.moderation_note">
+            Ghi chú của kiểm duyệt viên: {{ listing.moderation_note }}
+        </template>
+    </p>
 
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <!-- Gallery -->
@@ -115,6 +145,11 @@ watch(
                 <h1 class="text-xl leading-7 font-semibold">
                     {{ listing.title }}
                 </h1>
+
+                <ListingActions
+                    :listing="listing"
+                    :report-reasons="reportReasons"
+                />
 
                 <div>
                     <p class="text-sm text-muted-foreground">
@@ -189,6 +224,12 @@ watch(
                 />
             </div>
 
+            <SettlementPanel
+                v-if="listing.can.settle"
+                :key="listing.winning_price ?? 0"
+                :listing="listing"
+            />
+
             <!-- Seller -->
             <div class="rounded-lg border bg-background p-4">
                 <div class="flex items-center gap-3">
@@ -203,8 +244,21 @@ watch(
                         }}</AvatarFallback>
                     </Avatar>
                     <div class="min-w-0">
-                        <p class="truncate font-medium">
+                        <Link
+                            :href="userShow(listing.seller.id)"
+                            class="block truncate font-medium underline-offset-4 hover:underline"
+                        >
                             {{ listing.seller.name }}
+                        </Link>
+                        <p
+                            v-if="listing.seller.review_count"
+                            class="flex items-center gap-1 text-xs text-muted-foreground"
+                        >
+                            <StarRating :value="listing.seller.rating" />
+                            {{ listing.seller.rating }} ({{
+                                listing.seller.review_count
+                            }}
+                            đánh giá)
                         </p>
                         <p class="text-xs text-muted-foreground">
                             {{ listing.seller.listing_count }} tin đăng ·
@@ -306,10 +360,12 @@ watch(
                 >
                     <Badge
                         v-for="tag in listing.tags"
-                        :key="tag"
+                        :key="tag.slug"
                         variant="secondary"
-                        >#{{ tag }}</Badge
+                        as-child
                     >
+                        <Link :href="tagShow(tag.slug)">#{{ tag.name }}</Link>
+                    </Badge>
                 </div>
             </section>
 
@@ -335,16 +391,27 @@ watch(
                         class="flex items-center justify-between gap-3 py-2"
                     >
                         <span class="min-w-0">
-                            <span class="block truncate font-medium">{{
-                                bid.bidder
-                            }}</span>
+                            <span class="block truncate font-medium"
+                                >{{ bid.bidder
+                                }}<template v-if="bid.mine"> (bạn)</template>
+                            </span>
                             <span class="text-xs text-muted-foreground">{{
                                 formatDateTime(bid.time)
                             }}</span>
                         </span>
-                        <span class="font-semibold tabular-nums">{{
-                            formatVnd(bid.price)
-                        }}</span>
+                        <span class="text-right">
+                            <span class="block font-semibold tabular-nums">{{
+                                formatVnd(bid.price)
+                            }}</span>
+                            <button
+                                v-if="bid.can_cancel"
+                                type="button"
+                                class="text-xs text-muted-foreground underline underline-offset-4 hover:text-destructive"
+                                @click="cancelBid(bid)"
+                            >
+                                Huỷ lượt này
+                            </button>
+                        </span>
                     </li>
                 </ul>
                 <p v-else class="text-sm text-muted-foreground">

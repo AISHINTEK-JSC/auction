@@ -11,7 +11,7 @@ import {
 import Countdown from '@/components/marketplace/Countdown.vue';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime, formatVnd } from '@/lib/format';
-import { show } from '@/routes/listings';
+import { edit, show } from '@/routes/listings';
 import { AuctionStatus, AuctionType } from '@/types';
 import type { ListingCard } from '@/types';
 
@@ -21,8 +21,9 @@ defineProps<{
 </script>
 
 <template>
+    <!-- A listing still waiting for approval has no auction, hence no detail page. -->
     <Link
-        :href="show(listing.id)"
+        :href="listing.has_auction ? show(listing.id) : edit(listing.id)"
         class="group flex flex-col overflow-hidden rounded-lg border bg-card text-card-foreground transition-shadow hover:shadow-md"
     >
         <div class="relative aspect-square bg-muted">
@@ -55,6 +56,13 @@ defineProps<{
                 {{
                     listing.auction_type === AuctionType.Down ? 'Ngược' : 'Xuôi'
                 }}
+            </Badge>
+            <Badge
+                v-if="listing.moderation !== 'approved'"
+                variant="secondary"
+                class="absolute top-2 right-2"
+            >
+                {{ listing.moderation_label }}
             </Badge>
         </div>
 

@@ -22,6 +22,9 @@ class CommentResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Bình luận';
 
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'Bình luận';
+
     protected static ?int $navigationSort = 4;
 
     public static function canCreate(): bool

@@ -99,6 +99,36 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
     - Engine cũ gửi webhook trước khi commit trạng thái mới. Nếu phiên đã hết giờ mà engine vẫn báo đang mở, webhook đọc lại engine thêm một lần sau khi đã trả lời (cần php-fpm; với `php artisan serve` thì `auctions:sync` sẽ cập nhật trong vòng một phút).
     - Engine cũ lỗi khi lượt đặt giá không kèm giá (đặt nhanh, mua ngay) thiếu trường `bid_price`. Client luôn gửi `bid_price = 0`, engine tự tính lại giá.
 
+## Tính năng
+
+**Tin đăng**
+
+- Đăng tin đấu giá xuôi / ngược; **sửa** nội dung, ảnh và thẻ sau khi đăng (giá và thời gian thuộc về engine, không sửa được).
+- **Đăng lại** phiên kết thúc không có người thắng hoặc tin bị từ chối: tạo tin mới, ảnh được chép từ tin cũ.
+- Trang theo danh mục `/c/{slug}`, theo thẻ `/t/{slug}`, tìm kiếm `/search`, và trang công khai của thành viên `/u/{id}`.
+
+**Đấu giá**
+
+- Đặt giá, đặt nhanh, mua ngay; **huỷ lượt đặt** của mình khi phiên còn chạy.
+- **Theo dõi** phiên; trang "Phiên đấu giá của tôi" có các tab Đang bán, Đang tham gia (kèm đang dẫn đầu / bị vượt giá), Theo dõi, Đã thắng, Đã kết thúc, Chờ duyệt.
+- Khi phiên kết thúc, người bán và người thắng thấy **thông tin liên hệ** của nhau, **đánh giá** nhau (1–5 sao), và một trong hai có thể ghi nhận **người thắng từ bỏ**: engine chuyển kết quả cho người đặt giá cao kế tiếp, không còn ai thì huỷ phiên.
+
+**Thông báo** (chuông trên header + email): bị vượt giá, thắng / thua, phiên của mình có người thắng hoặc không, người thắng từ bỏ, tin được duyệt / từ chối / ẩn, trúng quà tặng. Email được gửi ngay trong request (không cần queue worker); khi chạy Docker xem ở Mailpit.
+
+**Kiểm duyệt**
+
+- Thành viên **báo cáo** tin vi phạm; kiểm duyệt viên ẩn tin hoặc bỏ qua.
+- Tuỳ chọn **duyệt tin trước khi hiển thị** (nút trên trang Tin đấu giá của admin, mặc định tắt). Khi bật, tin mới ở trạng thái "Chờ duyệt" và **chưa có phiên trong engine**; phiên chỉ được mở lúc duyệt. Nếu giờ bắt đầu đã qua thì phiên bắt đầu ngay; nếu giờ kết thúc đã qua thì không duyệt được, cần từ chối để người bán đăng lại.
+- Ẩn tin không dừng phiên trong engine; dùng "Huỷ phiên" nếu cần.
+
+**Quà tặng** (`/giveaways`)
+
+- Admin tạo chương trình (quà, số người trúng, hạn đăng ký) trong trang quản trị.
+- Mỗi thành viên có một **mã số 6 chữ số cấp một lần khi đăng ký và không đổi**; bấm "Đăng ký tham gia" là vào danh sách, mỗi người một lượt cho mỗi chương trình.
+- "Quay thưởng" chọn ngẫu nhiên, chỉ quay một lần; tài khoản bị khoá không trúng. Người trúng được công bố bằng tên và mã số, và nhận thông báo.
+
+**Vai trò**: Thành viên, Kiểm duyệt viên (tin đấu giá, báo cáo, bình luận, yêu cầu mở khoá), Quản trị viên (thêm thành viên, danh mục, chặn IP / email, quà tặng, cài đặt). Đổi vai trò ở trang Thành viên.
+
 ## Cấu trúc code
 
 ```
@@ -115,11 +145,12 @@ resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, Commen
 
 ## Quản trị
 
-`/admin`, chỉ tài khoản có `is_admin`:
+`/admin`, dành cho quản trị viên và kiểm duyệt viên:
 
-- **Thành viên**: khoá / mở khoá, cấp quyền admin, và nút **Chính sách mật khẩu** (độ dài, chữ hoa/thường, chữ số, ký tự đặc biệt) áp dụng cho đăng ký và đổi mật khẩu.
-- **Tin đấu giá**: xem, đồng bộ lại với engine, huỷ phiên.
-- **Danh mục**, **Bình luận**, **Yêu cầu mở khoá**.
+- **Bảng điều khiển**: số phiên, phiên thành công, doanh số (tổng giá chốt), người dùng mới, tin chờ duyệt, báo cáo chưa xử lý.
+- **Thành viên**: khoá / mở khoá, đổi vai trò, và nút **Chính sách mật khẩu** (độ dài, chữ hoa/thường, chữ số, ký tự đặc biệt) áp dụng cho đăng ký và đổi mật khẩu.
+- **Tin đấu giá**: duyệt, từ chối, ẩn, đồng bộ lại với engine, huỷ phiên; bật / tắt duyệt tin trước khi hiển thị.
+- **Báo cáo vi phạm**, **Bình luận**, **Yêu cầu mở khoá**, **Danh mục**, **Tặng quà**.
 - **IP bị chặn**, **Tên miền email bị chặn**: chặn đăng ký.
 
 Người dùng bị khoá sẽ bị đăng xuất ở request kế tiếp và được chuyển tới `/blocked` để gửi yêu cầu mở khoá.

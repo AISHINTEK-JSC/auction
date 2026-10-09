@@ -5,7 +5,9 @@ export type User = {
     avatar?: string | null;
     phone: string | null;
     address: string | null;
-    is_admin: boolean;
+    role: 'user' | 'moderator' | 'admin';
+    /** Permanent member number, used to join giveaways. */
+    member_code: string | null;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
     created_at: string;

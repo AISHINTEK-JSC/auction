@@ -5,6 +5,7 @@ import ListingGrid from '@/components/marketplace/ListingGrid.vue';
 import Pagination from '@/components/marketplace/Pagination.vue';
 import { show as categoryShow } from '@/routes/categories';
 import { index } from '@/routes/listings';
+import { show as tagShow } from '@/routes/tags';
 import type { ListingCard, Paginated } from '@/types';
 
 type Filters = {
@@ -18,6 +19,7 @@ type Filters = {
 const props = defineProps<{
     listings: Paginated<ListingCard>;
     category: { id: number; name: string; slug: string } | null;
+    tag: { name: string; slug: string } | null;
     filters: Filters;
 }>();
 
@@ -27,6 +29,10 @@ const form = reactive({ ...props.filters });
 const title = computed(() => {
     if (props.category) {
         return props.category.name;
+    }
+
+    if (props.tag) {
+        return `#${props.tag.name}`;
     }
 
     return props.filters.q
@@ -46,7 +52,9 @@ function apply() {
     router.get(
         props.category
             ? categoryShow(props.category.slug, { query }).url
-            : index({ query }).url,
+            : props.tag
+              ? tagShow(props.tag.slug, { query }).url
+              : index({ query }).url,
         {},
         { preserveState: true, preserveScroll: true },
     );

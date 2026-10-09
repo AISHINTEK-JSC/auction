@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowLeft } from '@lucide/vue';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { show } from '@/routes/listings';
+import { destroy } from '@/routes/listings/bids';
 import { BidType } from '@/types';
 import type { Bid } from '@/types';
 
-defineProps<{
+const props = defineProps<{
     listing: { id: number; title: string };
     bids: Bid[];
 }>();
+
+function cancel(bid: Bid) {
+    if (window.confirm(`Huỷ lượt đặt giá ${formatVnd(bid.price)} của bạn?`)) {
+        router.delete(destroy(props.listing.id).url, {
+            data: { bid_price: bid.price },
+            preserveScroll: true,
+        });
+    }
+}
 </script>
 
 <template>
@@ -62,10 +72,23 @@ defineProps<{
                         <td class="px-4 py-2">
                             {{ bid.bidder }}
                             <span
+                                v-if="bid.mine"
+                                class="text-xs text-muted-foreground"
+                                >(bạn)</span
+                            >
+                            <span
                                 v-if="bid.type > BidType.Market"
                                 class="text-xs text-muted-foreground"
                                 >(tự động)</span
                             >
+                            <button
+                                v-if="bid.can_cancel"
+                                type="button"
+                                class="ml-2 text-xs text-muted-foreground underline underline-offset-4 hover:text-destructive"
+                                @click="cancel(bid)"
+                            >
+                                Huỷ
+                            </button>
                         </td>
                         <td class="px-4 py-2 text-right tabular-nums">
                             {{ formatVnd(bid.price) }}

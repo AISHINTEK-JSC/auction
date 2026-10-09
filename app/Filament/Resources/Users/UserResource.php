@@ -2,11 +2,14 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Enums\UserRole;
+use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -18,6 +21,8 @@ use Filament\Tables\Table;
 
 class UserResource extends Resource
 {
+    use AdminOnly;
+
     protected static ?string $model = User::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
@@ -25,6 +30,9 @@ class UserResource extends Resource
     protected static ?string $modelLabel = 'thành viên';
 
     protected static ?string $pluralModelLabel = 'Thành viên';
+
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'Thành viên';
 
     protected static ?int $navigationSort = 1;
 
@@ -54,7 +62,14 @@ class UserResource extends Resource
                 TextColumn::make('phone')->label('SĐT')->placeholder('—'),
                 IconColumn::make('email_verified_at')->label('Đã xác thực')->boolean()
                     ->getStateUsing(fn (User $record) => $record->email_verified_at !== null),
-                IconColumn::make('is_admin')->label('Admin')->boolean(),
+                TextColumn::make('role')->label('Vai trò')->badge()
+                    ->formatStateUsing(fn (UserRole $state) => $state->label())
+                    ->color(fn (UserRole $state) => match ($state) {
+                        UserRole::Admin => 'danger',
+                        UserRole::Moderator => 'warning',
+                        UserRole::User => 'gray',
+                    }),
+                TextColumn::make('member_code')->label('Mã số')->searchable(),
                 TextColumn::make('blocked_at')->label('Khoá lúc')->dateTime('d/m/Y H:i')->placeholder('—')
                     ->description(fn (User $record) => $record->block_reason),
                 TextColumn::make('created_at')->label('Tham gia')->dateTime('d/m/Y')->sortable(),
@@ -76,14 +91,15 @@ class UserResource extends Resource
                     ->visible(fn (User $record) => $record->isBlocked())
                     ->requiresConfirmation()
                     ->action(fn (User $record) => $record->forceFill(['blocked_at' => null, 'block_reason' => null])->save()),
-                Action::make('toggleAdmin')
-                    ->label(fn (User $record) => $record->is_admin ? 'Gỡ quyền admin' : 'Cấp quyền admin')
-                    ->icon(Heroicon::OutlinedShieldCheck)
-                    ->color('gray')
+                Action::make('changeRole')->label('Đổi vai trò')->icon(Heroicon::OutlinedShieldCheck)->color('gray')
                     ->visible(fn (User $record) => ! $record->is(auth()->user()))
-                    ->requiresConfirmation()
-                    // is_admin is deliberately not mass assignable.
-                    ->action(fn (User $record) => $record->forceFill(['is_admin' => ! $record->is_admin])->save()),
+                    ->fillForm(fn (User $record): array => ['role' => $record->role->value])
+                    ->schema([
+                        Select::make('role')->label('Vai trò')->required()
+                            ->options(collect(UserRole::cases())->mapWithKeys(fn (UserRole $role) => [$role->value => $role->label()])),
+                    ])
+                    // role is deliberately not mass assignable.
+                    ->action(fn (User $record, array $data) => $record->forceFill(['role' => $data['role']])->save()),
                 EditAction::make(),
             ]);
     }

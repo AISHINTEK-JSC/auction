@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BlockedIps;
 
+use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\BlockedIps\Pages\ManageBlockedIps;
 use App\Models\BlockedIp;
 use BackedEnum;
@@ -19,6 +20,8 @@ use Filament\Tables\Table;
  */
 class BlockedIpResource extends Resource
 {
+    use AdminOnly;
+
     protected static ?string $model = BlockedIp::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedNoSymbol;
@@ -26,6 +29,9 @@ class BlockedIpResource extends Resource
     protected static ?string $modelLabel = 'IP bị chặn';
 
     protected static ?string $pluralModelLabel = 'IP bị chặn';
+
+    // Set explicitly: Filament would title-case the plural label in the menu.
+    protected static ?string $navigationLabel = 'IP bị chặn';
 
     protected static ?int $navigationSort = 6;
 
