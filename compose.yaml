@@ -1,0 +1,100 @@
+name: auction-fe
+
+x-app: &app
+    image: auction-fe-app:dev
+    build:
+        context: .
+        dockerfile: docker/php/Dockerfile
+        args:
+            UID: ${UID:-1000}
+            GID: ${GID:-1000}
+    volumes:
+        - .:/var/www/html
+    environment:
+        # Override the host-oriented .env: inside compose the app talks to these services.
+        DB_CONNECTION: mysql
+        DB_HOST: mysql
+        DB_PORT: 3306
+        DB_DATABASE: auction_fe
+        DB_USERNAME: auction_fe
+        DB_PASSWORD: secret
+        MAIL_MAILER: smtp
+        MAIL_HOST: mailpit
+        MAIL_PORT: 1025
+        AUCTION_ENGINE_URL: ${AUCTION_ENGINE_DOCKER_URL:-http://host.docker.internal:8801/api/v1}
+    extra_hosts:
+        - 'host.docker.internal:host-gateway'
+    depends_on:
+        mysql:
+            condition: service_healthy
+    restart: unless-stopped
+
+services:
+    app:
+        <<: *app
+
+    nginx:
+        image: nginx:1.27-alpine
+        ports:
+            - '${APP_PORT:-8802}:80'
+        volumes:
+            - ./public:/var/www/html/public:ro
+            - ./storage/app/public:/var/www/html/storage/app/public:ro
+            - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+        depends_on:
+            - app
+        restart: unless-stopped
+
+    # Runs auctions:sync every minute (see routes/console.php).
+    scheduler:
+        <<: *app
+        command: ['php', 'artisan', 'schedule:work']
+
+    vite:
+        <<: *app
+        command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
+        ports:
+            - '${VITE_PORT:-5173}:5173'
+        profiles: ['dev']
+
+    mysql:
+        image: mysql:8.4
+        environment:
+            MYSQL_DATABASE: auction_fe
+            MYSQL_USER: auction_fe
+            MYSQL_PASSWORD: secret
+            MYSQL_ROOT_PASSWORD: root
+            TZ: Asia/Ho_Chi_Minh
+        command:
+            [
+                '--character-set-server=utf8mb4',
+                '--collation-server=utf8mb4_unicode_ci',
+            ]
+        ports:
+            - '${FORWARD_DB_PORT:-33062}:3306'
+        volumes:
+            - mysql-data:/var/lib/mysql
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'mysqladmin',
+                    'ping',
+                    '-h',
+                    '127.0.0.1',
+                    '-uroot',
+                    '-proot',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 30
+        restart: unless-stopped
+
+    mailpit:
+        image: axllent/mailpit:latest
+        ports:
+            - '${MAILPIT_PORT:-8027}:8025'
+        restart: unless-stopped
+
+volumes:
+    mysql-data:
