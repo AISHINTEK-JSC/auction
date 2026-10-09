@@ -16,7 +16,8 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * The rules of the marketplace an admin can change without touching code:
- * listing lifetime, forfeit penalties, moderation and the password policy.
+ * listing lifetime, forfeit penalties, moderation, the password policy and
+ * the contact address.
  */
 class MarketplaceSettingsPage extends Page
 {
@@ -55,8 +56,13 @@ class MarketplaceSettingsPage extends Page
                     ...MarketplaceSettings::all(),
                     'listing_approval' => CreateListing::approvalRequired(),
                     ...Setting::passwordPolicy(),
+                    // The stored address only: blank while the default one is in use.
+                    'contact_email' => (string) Setting::read(MarketplaceSettings::CONTACT_EMAIL, ''),
                 ])
                 ->schema([
+                    TextInput::make('contact_email')->label('Email liên hệ')
+                        ->helperText('Hiện ở trang Điều khoản và Chính sách quyền riêng tư. Để trống thì dùng địa chỉ mặc định: '.config('marketplace.contact_email').'.')
+                        ->email()->maxLength(255),
                     TextInput::make('fixed_listing_days')->label('Tin giá cố định hiển thị (ngày)')
                         ->integer()->minValue(1)->maxValue(365)->required(),
                     TextInput::make('expiry_reminder_days')->label('Nhắc người bán trước khi hết hạn (ngày)')
@@ -81,6 +87,7 @@ class MarketplaceSettingsPage extends Page
                     $before = $this->flat();
 
                     MarketplaceSettings::save(array_map('intval', array_intersect_key($data, MarketplaceSettings::all())));
+                    MarketplaceSettings::saveContactEmail($data['contact_email'] ?? null);
                     Setting::write(Setting::LISTING_APPROVAL, (bool) $data['listing_approval']);
                     Setting::write(Setting::PASSWORD_POLICY, [
                         'min_length' => (int) $data['min_length'],
@@ -119,6 +126,9 @@ class MarketplaceSettingsPage extends Page
         $yesNo = fn (bool $value) => $value ? 'Có' : 'Không';
 
         return [
+            'Liên hệ' => [
+                'Email liên hệ' => MarketplaceSettings::contactEmail(),
+            ],
             'Tin đăng' => [
                 'Tin giá cố định hiển thị' => $days($settings['fixed_listing_days']),
                 'Nhắc người bán trước khi hết hạn' => $days($settings['expiry_reminder_days'], 'Không nhắc'),

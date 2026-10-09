@@ -1,4 +1,4 @@
-# Chợ Đấu Giá (auction-fe)
+# Chốt Giá (auction-fe)
 
 Giao diện và kho dữ liệu người dùng của sàn đấu giá. App này giữ **user, tin đăng, ảnh, danh mục, bình luận**; mọi nghiệp vụ đấu giá (giá, lượt đặt, thời gian, người thắng) do **auction engine** ở `../auction/sourcecode` xử lý và được gọi qua HTTP từ phía server.
 
@@ -136,12 +136,12 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 - Mỗi thành viên có một **mã số 6 chữ số cấp một lần khi đăng ký và không đổi**; bấm "Đăng ký tham gia" là vào danh sách, mỗi người một lượt cho mỗi chương trình.
 - "Quay thưởng" chọn ngẫu nhiên, chỉ quay một lần; tài khoản bị khoá không trúng. Người trúng được công bố bằng tên và mã số, và nhận thông báo.
 
-**Điều khoản và quyền riêng tư**: `/terms` và `/privacy`, có liên kết ở chân trang và ở form đăng ký. Nội dung nằm trong `resources/js/pages/legal/` và là **bản mẫu**: cần rà soát lại (nên có người am hiểu pháp lý xem) trước khi chạy thật. Sửa nội dung thì đổi luôn ngày cập nhật trong `SiteController::legalProps()`. Địa chỉ liên hệ lấy từ `CONTACT_EMAIL`.
+**Điều khoản và quyền riêng tư**: `/terms` và `/privacy`, có liên kết ở chân trang và ở form đăng ký. Nội dung nằm trong `resources/js/pages/legal/` và là **bản mẫu**: cần rà soát lại (nên có người am hiểu pháp lý xem) trước khi chạy thật. Sửa nội dung thì đổi luôn ngày cập nhật trong `SiteController::legalProps()`. Email liên hệ trên hai trang chỉnh ở trang quản trị → Cài đặt → "Email liên hệ"; để trống thì dùng `CONTACT_EMAIL` trong `.env` (không có nữa thì `MAIL_FROM_ADDRESS`).
 
 **SEO và chia sẻ liên kết**
 
 - Thẻ mô tả, Open Graph, Twitter Card, `canonical` và `robots` được in sẵn trong HTML từ server (`resources/views/app.blade.php`, dữ liệu từ `App\Support\Seo`), vì bot tìm kiếm và Facebook / Zalo không chạy JavaScript. Controller gắn bằng `->withViewData('seo', Seo::...)`; trang không gắn gì (bảng điều khiển, form, cài đặt…) mặc định là `noindex`.
-- Trang tin đăng dùng ảnh bìa làm ảnh xem trước, mô tả gồm hình thức bán, giá, trạng thái, khu vực, và có JSON-LD `Product` để kết quả tìm kiếm hiện giá. Trang không có ảnh dùng `public/apple-touch-icon.png`; nên thay bằng một ảnh 1200×630 riêng của site.
+- Trang tin đăng dùng ảnh bìa làm ảnh xem trước, mô tả gồm hình thức bán, giá, trạng thái, khu vực, và có JSON-LD `Product` để kết quả tìm kiếm hiện giá. Trang không có ảnh dùng `public/og-image.png` (logo và tên site, 1200×630).
 - `/sitemap.xml` liệt kê trang chủ, danh mục, thẻ, quà tặng và tối đa 5.000 tin công khai mới nhất, lưu cache 10 phút. `/robots.txt` do app sinh ra (trỏ tới sitemap, chặn các khu vực riêng tư), nên nginx phải chuyển nó cho PHP như trong `docker/nginx/default.conf`.
 - Ảnh xem trước và sitemap dùng địa chỉ tuyệt đối theo `APP_URL`: phải đặt đúng tên miền thật khi triển khai.
 

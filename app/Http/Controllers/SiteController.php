@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Giveaway;
 use App\Models\Listing;
 use App\Models\Tag;
+use App\Support\MarketplaceSettings;
 use App\Support\Seo;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
@@ -107,7 +108,7 @@ class SiteController extends Controller
     private function legalProps(): array
     {
         return [
-            'contactEmail' => (string) config('marketplace.contact_email'),
+            'contactEmail' => MarketplaceSettings::contactEmail(),
             // The date the texts in resources/js/pages/legal were last revised.
             'updatedAt' => '10/10/2026',
         ];

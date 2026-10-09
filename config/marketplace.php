@@ -38,11 +38,13 @@ return [
     |--------------------------------------------------------------------------
     |
     | The address shown on the terms and privacy pages for questions and
-    | requests about personal data.
+    | requests about personal data. An admin can replace it in the admin
+    | panel (Cài đặt > Email liên hệ); this is the value used until then.
     |
     */
 
-    'contact_email' => env('CONTACT_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+    // "?:" and not a default: an empty CONTACT_EMAIL= line in .env must fall back too.
+    'contact_email' => env('CONTACT_EMAIL') ?: env('MAIL_FROM_ADDRESS', 'hello@example.com'),
 
     'forfeit_window_days' => (int) env('FORFEIT_WINDOW_DAYS', 90),
 

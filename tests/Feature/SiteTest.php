@@ -43,7 +43,8 @@ class SiteTest extends TestCase
             ->assertSee('<meta name="description" content="Sàn đấu giá', false)
             ->assertSee('<meta property="og:site_name" content="'.config('app.name').'">', false)
             ->assertSee('<link rel="canonical" href="'.route('home').'">', false)
-            ->assertSee('<meta name="twitter:card" content="summary">', false);
+            ->assertSee('<meta property="og:image" content="'.url('og-image.png').'">', false)
+            ->assertSee('<meta name="twitter:card" content="summary_large_image">', false);
 
         $category = Category::factory()->create(['name' => 'Máy ảnh']);
 

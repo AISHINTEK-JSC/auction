@@ -12,6 +12,8 @@ class MarketplaceSettings
 {
     public const KEY = 'marketplace';
 
+    public const CONTACT_EMAIL = 'contact_email';
+
     /**
      * Every setting with its current value.
      *
@@ -38,6 +40,25 @@ class MarketplaceSettings
     public static function save(array $values): void
     {
         Setting::write(self::KEY, array_intersect_key($values, self::all()));
+    }
+
+    /**
+     * The address shown on the terms and privacy pages. Until an admin sets
+     * one, the address from the environment (CONTACT_EMAIL) is used.
+     */
+    public static function contactEmail(): string
+    {
+        $stored = Setting::read(self::CONTACT_EMAIL);
+
+        return is_string($stored) && $stored !== '' ? $stored : (string) config('marketplace.contact_email');
+    }
+
+    /**
+     * An empty address goes back to the one from the environment.
+     */
+    public static function saveContactEmail(?string $email): void
+    {
+        Setting::write(self::CONTACT_EMAIL, trim((string) $email));
     }
 
     /** How long a fixed-price listing stays up. */

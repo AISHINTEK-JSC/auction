@@ -29,6 +29,8 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->brandName(config('app.name').' · Quản trị')
+            ->brandLogo(fn () => view('filament.brand'))
+            ->favicon(asset('favicon.svg').'?v=2')
             // Tables here have many columns and row actions: use the whole width
             // instead of Filament's default 7xl container.
             ->maxContentWidth(Width::Full)

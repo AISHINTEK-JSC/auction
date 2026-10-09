@@ -15,12 +15,14 @@ use App\Models\AdminAction;
 use App\Models\Comment;
 use App\Models\Listing;
 use App\Models\ListingReport;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\ForfeitPenalty;
 use App\Support\DailySeries;
 use App\Support\MarketplaceSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -44,9 +46,10 @@ class AdminToolsTest extends TestCase
 
     public function test_an_admin_changes_settings_on_the_settings_page_and_it_is_logged(): void
     {
+        config(['marketplace.contact_email' => 'macdinh@example.com']);
         $admin = User::factory()->admin()->create();
 
-        $this->actingAs($admin)->get('/admin/settings')->assertOk()->assertSee('Tin giá cố định hiển thị')->assertSee('30 ngày');
+        $this->actingAs($admin)->get('/admin/settings')->assertOk()->assertSee('Tin giá cố định hiển thị')->assertSee('30 ngày')->assertSee('macdinh@example.com');
         $this->actingAs(User::factory()->moderator()->create())->get('/admin/settings')->assertForbidden();
 
         Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
@@ -61,9 +64,11 @@ class AdminToolsTest extends TestCase
                 'mixed_case' => false,
                 'numbers' => true,
                 'symbols' => false,
+                'contact_email' => 'hotro@chotgia.test',
             ])
             ->assertHasNoActionErrors();
 
+        $this->assertSame('hotro@chotgia.test', MarketplaceSettings::contactEmail());
         $this->assertSame(60, MarketplaceSettings::fixedListingDays());
         $this->assertSame(5, MarketplaceSettings::expiryReminderDays());
 
@@ -73,11 +78,38 @@ class AdminToolsTest extends TestCase
         $this->assertStringContainsString('Tin giá cố định hiển thị: 30 ngày → 60 ngày', $log->summary);
         $this->assertStringContainsString('Duyệt tin trước khi hiển thị: Tắt → Bật', $log->summary);
         $this->assertStringNotContainsString('Tính các lần từ bỏ', $log->summary);
+        $this->assertStringContainsString('Email liên hệ: macdinh@example.com → hotro@chotgia.test', $log->summary);
+
+        // The terms page shows the new address.
+        $this->get(route('legal.terms'))->assertInertia(fn (Assert $page) => $page->where('contactEmail', 'hotro@chotgia.test'));
 
         // The new values are in force.
         $this->post('/logout');
         $this->post(route('register.store'), ['name' => 'A', 'email' => 'a@example.com', 'password' => 'password', 'password_confirmation' => 'password'])
             ->assertSessionHasErrors('password');
+    }
+
+    public function test_the_contact_email_falls_back_to_the_default_and_must_be_an_address(): void
+    {
+        config(['marketplace.contact_email' => 'macdinh@example.com']);
+        MarketplaceSettings::saveContactEmail('hotro@chotgia.test');
+
+        $settings = [
+            ...MarketplaceSettings::all(),
+            'listing_approval' => false,
+            ...Setting::passwordPolicy(),
+        ];
+
+        Livewire::actingAs(User::factory()->admin()->create())->test(MarketplaceSettingsPage::class)
+            ->callAction('edit', [...$settings, 'contact_email' => 'không phải email'])
+            ->assertHasActionErrors(['contact_email']);
+        $this->assertSame('hotro@chotgia.test', MarketplaceSettings::contactEmail());
+
+        // Cleared: back to the address from the environment.
+        Livewire::actingAs(User::factory()->admin()->create())->test(MarketplaceSettingsPage::class)
+            ->callAction('edit', [...$settings, 'contact_email' => ''])
+            ->assertHasNoActionErrors();
+        $this->assertSame('macdinh@example.com', MarketplaceSettings::contactEmail());
     }
 
     public function test_the_forfeit_penalty_follows_the_admin_settings(): void

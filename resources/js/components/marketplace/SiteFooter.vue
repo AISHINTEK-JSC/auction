@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Gavel } from '@lucide/vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { computed } from 'vue';
 import { useAuthUser } from '@/composables/useAuthUser';
 import { dashboard, home, login, register } from '@/routes';
@@ -28,11 +28,7 @@ const linkClass = 'hover:text-foreground hover:underline underline-offset-4';
                     :href="home()"
                     class="flex items-center gap-2 font-semibold"
                 >
-                    <span
-                        class="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
-                    >
-                        <Gavel class="size-4" />
-                    </span>
+                    <AppLogoIcon class="size-8" />
                     {{ page.props.name }}
                 </Link>
                 <p class="text-muted-foreground">

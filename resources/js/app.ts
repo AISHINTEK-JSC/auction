@@ -5,7 +5,7 @@ import MarketplaceLayout from '@/layouts/MarketplaceLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeFlashToast } from '@/lib/flashToast';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Chợ Đấu Giá';
+const appName = import.meta.env.VITE_APP_NAME || 'Chốt Giá';
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

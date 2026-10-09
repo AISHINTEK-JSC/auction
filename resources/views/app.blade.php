@@ -30,9 +30,10 @@
             }
         </style>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        {{-- "?v=" makes browsers drop the icon they cached; raise it when the logo changes. --}}
+        <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 
         @fonts
 
@@ -50,7 +51,7 @@
         <meta property="og:description" content="{{ $seo['description'] }}">
         <meta property="og:url" content="{{ $seo['url'] }}">
         <meta property="og:image" content="{{ $seo['image'] }}">
-        <meta name="twitter:card" content="{{ $seo['has_large_image'] ? 'summary_large_image' : 'summary' }}">
+        <meta name="twitter:card" content="summary_large_image">
         @if ($seo['json_ld'])
             <script type="application/ld+json">{!! json_encode($seo['json_ld'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
         @endif

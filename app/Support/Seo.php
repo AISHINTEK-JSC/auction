@@ -20,6 +20,9 @@ class Seo
 {
     private const DESCRIPTION_LENGTH = 160;
 
+    /** Shown when a shared page has no picture of its own: the logo and name, 1200×630. */
+    private const SHARE_IMAGE = 'og-image.png';
+
     /**
      * A public page.
      *
@@ -121,8 +124,7 @@ class Seo
         return [
             ...$seo,
             // Link previews need a full address, not a path.
-            'image' => url($seo['image'] ?? 'apple-touch-icon.png'),
-            'has_large_image' => $seo['image'] !== null,
+            'image' => url($seo['image'] ?? self::SHARE_IMAGE),
             // Without the query string: filters and pages are not separate documents.
             'url' => url()->current(),
         ];

@@ -1,0 +1,11 @@
+{{-- The admin panel's logo: the site mark and its name. The drawing is the one in
+     public/favicon.svg and resources/js/components/AppLogoIcon.vue; keep them in step. --}}
+<span style="display: inline-flex; align-items: center; gap: 0.625rem; font-size: 1rem; font-weight: 700; line-height: 1;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#059669"/>
+        <path fill="#fff" d="M7 9a2 2 0 0 1 2-2h6.34a2 2 0 0 1 1.42.59l8.65 8.65a2 2 0 0 1 0 2.83l-6.34 6.34a2 2 0 0 1-2.83 0L7.59 16.76A2 2 0 0 1 7 15.34z"/>
+        <circle cx="11.3" cy="11.3" r="1.6" fill="#059669"/>
+        <path fill="none" stroke="#059669" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="m13.5 17.4 2.5 2.5 4.6-5.3"/>
+    </svg>
+    <span>{{ config('app.name') }} · Quản trị</span>
+</span>

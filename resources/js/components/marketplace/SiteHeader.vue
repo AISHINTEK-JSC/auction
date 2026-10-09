@@ -3,7 +3,6 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import {
     BellRing,
     ChevronDown,
-    Gavel,
     Gift,
     LayoutGrid,
     Menu,
@@ -12,6 +11,7 @@ import {
     Shield,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import CitySelect from '@/components/marketplace/CitySelect.vue';
 import NotificationBell from '@/components/marketplace/NotificationBell.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -115,11 +115,7 @@ function search() {
                 :href="home()"
                 class="flex shrink-0 items-center gap-2 font-semibold"
             >
-                <span
-                    class="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
-                >
-                    <Gavel class="size-4" />
-                </span>
+                <AppLogoIcon class="size-8" />
                 <span class="hidden sm:inline">{{ page.props.name }}</span>
             </Link>
 
