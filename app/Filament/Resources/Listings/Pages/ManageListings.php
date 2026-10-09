@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Listings\Pages;
 use App\Actions\Listings\CreateListing;
 use App\Filament\Resources\Listings\ListingResource;
 use App\Models\Setting;
+use App\Support\AdminLog;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
@@ -30,6 +31,10 @@ class ManageListings extends ManageRecords
                     : 'Bật: tin mới phải được kiểm duyệt viên duyệt rồi mới hiển thị và mở phiên đấu giá.')
                 ->action(function (): void {
                     Setting::write(Setting::LISTING_APPROVAL, ! CreateListing::approvalRequired());
+
+                    AdminLog::record('settings.listing_approval', null, CreateListing::approvalRequired()
+                        ? 'Bật duyệt tin trước khi hiển thị'
+                        : 'Tắt duyệt tin trước khi hiển thị');
 
                     Notification::make()->title('Đã lưu')->success()->send();
                 }),

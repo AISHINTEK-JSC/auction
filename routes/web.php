@@ -42,6 +42,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('listings/{listing}', [ListingController::class, 'update'])->name('listings.update');
     Route::delete('listings/{listing}', [ListingController::class, 'destroy'])->name('listings.destroy');
     Route::get('listings/{listing}/relist', [ListingController::class, 'relist'])->name('listings.relist');
+    Route::post('listings/{listing}/sold', [ListingController::class, 'sold'])->name('listings.sold');
 
     Route::post('listings/{listing}/bids', [ListingBidController::class, 'store'])
         ->middleware('throttle:30,1')

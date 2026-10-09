@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\NotificationPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -15,14 +16,7 @@ class NotificationController extends Controller
         return Inertia::render('notifications/Index', [
             'notifications' => $request->user()->notifications()
                 ->paginate(20)
-                ->through(fn (DatabaseNotification $notification) => [
-                    'id' => $notification->id,
-                    'kind' => $notification->data['kind'] ?? 'info',
-                    'title' => $notification->data['title'] ?? '',
-                    'body' => $notification->data['body'] ?? '',
-                    'read' => $notification->read_at !== null,
-                    'created_at' => $notification->created_at?->toIso8601String(),
-                ]),
+                ->through(fn (DatabaseNotification $notification) => NotificationPresenter::item($notification)),
         ]);
     }
 

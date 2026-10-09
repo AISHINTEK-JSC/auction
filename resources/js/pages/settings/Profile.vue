@@ -125,7 +125,7 @@ function uploadAvatar(event: Event) {
                     name="phone"
                     :default-value="user.phone ?? ''"
                     autocomplete="tel"
-                    placeholder="0912345678"
+                    placeholder="09xxx"
                 />
                 <InputError class="mt-2" :message="errors.phone" />
             </div>

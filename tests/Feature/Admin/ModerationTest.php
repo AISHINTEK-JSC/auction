@@ -4,13 +4,17 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\AuctionStatus;
 use App\Enums\ModerationStatus;
+use App\Filament\Resources\AdminActions\AdminActionResource;
+use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Filament\Widgets\MarketplaceStats;
+use App\Models\AdminAction;
 use App\Models\BlockedEmailDomain;
 use App\Models\BlockedIp;
 use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\UnlockRequest;
 use App\Models\User;
+use App\Services\ListingModeration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -60,6 +64,56 @@ class ModerationTest extends TestCase
         foreach (['/users', '/categories', '/blocked-ips', '/blocked-email-domains', '/giveaways'] as $path) {
             $this->actingAs($moderator)->get("/admin{$path}")->assertForbidden();
         }
+    }
+
+    public function test_staff_actions_are_written_to_the_audit_log_with_who_did_them(): void
+    {
+        $moderator = User::factory()->moderator()->create(['name' => 'Kiểm Duyệt']);
+        $listing = Listing::factory()->create(['title' => 'Hàng lạ', 'moderation_status' => ModerationStatus::Pending]);
+
+        $this->actingAs($moderator);
+        app(ListingModeration::class)->reject($listing, 'Ảnh mờ');
+        app(ListingModeration::class)->hide(Listing::factory()->create(['title' => 'Hàng cấm']), 'Vi phạm');
+
+        $log = AdminAction::query()->oldest('id')->get();
+        $this->assertSame(['listing.rejected', 'listing.hidden'], $log->pluck('action')->all());
+        $this->assertSame($moderator->id, $log[0]->user_id);
+        $this->assertSame($listing->id, $log[0]->subject_id);
+        $this->assertStringContainsString('Hàng lạ', $log[0]->summary);
+        $this->assertStringContainsString('Ảnh mờ', $log[0]->summary);
+
+        // Admins read the log; moderators do not; nobody can add or change lines.
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin)->get('/admin/audit-log')->assertOk()->assertSee('Kiểm Duyệt')->assertSee('Hàng cấm');
+        $this->actingAs($moderator)->get('/admin/audit-log')->assertForbidden();
+        $this->assertFalse(AdminActionResource::canCreate());
+        $this->assertFalse(AdminActionResource::canDelete($log[0]));
+    }
+
+    public function test_admin_panel_actions_log_themselves(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->create(['name' => 'Thành Viên']);
+        $member->forceFill(['bid_banned_until' => now()->addDays(5)])->save();
+
+        Livewire::actingAs($admin)->test(ManageUsers::class)
+            ->callTableAction('block', $member, ['block_reason' => 'Spam'])
+            ->callTableAction('unblock', $member)
+            ->callTableAction('changeRole', $member, ['role' => 'moderator'])
+            ->callTableAction('liftBidBan', $member)
+            ->assertHasNoTableActionErrors();
+
+        $member->refresh();
+        $this->assertFalse($member->isBlocked());
+        $this->assertFalse($member->isBidBanned());
+        $this->assertTrue($member->isStaff());
+
+        $this->assertSame(
+            ['user.blocked', 'user.unblocked', 'user.role_changed', 'user.bid_ban_lifted'],
+            AdminAction::query()->oldest('id')->pluck('action')->all(),
+        );
+        $this->assertSame([$admin->id], AdminAction::query()->distinct()->pluck('user_id')->all());
+        $this->assertStringContainsString('Thành viên → Kiểm duyệt viên', AdminAction::query()->where('action', 'user.role_changed')->sole()->summary);
     }
 
     public function test_the_dashboard_statistics_count_auctions_revenue_and_new_members(): void

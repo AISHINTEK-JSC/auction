@@ -8,6 +8,8 @@ export type User = {
     role: 'user' | 'moderator' | 'admin';
     /** Permanent member number, used to join giveaways. */
     member_code: string | null;
+    /** Set while the member may not bid, after giving up auction results too often. */
+    bid_banned_until: string | null;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
     created_at: string;

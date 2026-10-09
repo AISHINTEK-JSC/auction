@@ -11,18 +11,18 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Khám phá đấu giá" />
+    <Head title="Khám phá" />
 
     <section class="space-y-4">
         <div class="flex items-baseline justify-between">
-            <h1 class="text-2xl font-semibold">Khám phá đấu giá</h1>
+            <h1 class="text-2xl font-semibold">Đang mở bán và đấu giá</h1>
             <p class="text-sm text-muted-foreground">
-                {{ running.total }} phiên đang diễn ra
+                {{ running.total }} tin đang mở
             </p>
         </div>
         <ListingGrid
             :listings="running.data"
-            empty="Hiện chưa có phiên đấu giá nào đang diễn ra."
+            empty="Hiện chưa có tin nào đang mở."
         />
         <Pagination :page="running" />
     </section>

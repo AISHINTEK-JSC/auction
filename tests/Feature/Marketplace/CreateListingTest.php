@@ -40,6 +40,7 @@ class CreateListingTest extends TestCase
             'condition' => 'used',
             'images' => [UploadedFile::fake()->image('a.jpg'), UploadedFile::fake()->image('b.jpg')],
             'tags' => ['Máy ảnh', 'film'],
+            'sale_type' => 'auction',
             'auction_type' => 1,
             'start_price' => 100000,
             'end_time' => now()->addDay()->format('Y-m-d\TH:i'),

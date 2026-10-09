@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Comments;
 
 use App\Filament\Resources\Comments\Pages\ManageComments;
 use App\Models\Comment;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Resource;
@@ -11,6 +12,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class CommentResource extends Resource
 {
@@ -50,7 +52,13 @@ class CommentResource extends Resource
                 TextColumn::make('created_at')->label('Lúc')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->recordActions([
-                DeleteAction::make(),
+                // Logged before the delete, while the comment can still be read.
+                DeleteAction::make()->before(fn (Comment $record) => AdminLog::record('comment.deleted', $record, sprintf(
+                    'Xoá bình luận của %s ở tin #%d: "%s"',
+                    $record->user->name,
+                    $record->listing_id,
+                    Str::limit($record->body, 120),
+                ))),
             ]);
     }
 

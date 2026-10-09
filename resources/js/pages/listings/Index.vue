@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
+import CitySelect from '@/components/marketplace/CitySelect.vue';
 import ListingGrid from '@/components/marketplace/ListingGrid.vue';
 import Pagination from '@/components/marketplace/Pagination.vue';
 import { show as categoryShow } from '@/routes/categories';
@@ -13,7 +14,7 @@ type Filters = {
     city_id: number | null;
     type: number | null;
     status: 'open' | 'running' | 'upcoming' | 'ended';
-    sort: 'ending' | 'newest' | 'price_asc' | 'price_desc';
+    sort: 'ending' | 'newest' | 'popular' | 'price_asc' | 'price_desc';
 };
 
 const props = defineProps<{
@@ -23,7 +24,6 @@ const props = defineProps<{
     filters: Filters;
 }>();
 
-const cities = computed(() => usePage().props.cities);
 const form = reactive({ ...props.filters });
 
 const title = computed(() => {
@@ -37,7 +37,7 @@ const title = computed(() => {
 
     return props.filters.q
         ? `Kết quả cho “${props.filters.q}”`
-        : 'Tất cả phiên đấu giá';
+        : 'Tất cả tin đăng';
 });
 
 function apply() {
@@ -91,24 +91,24 @@ const selectClass = 'h-9 rounded-md border bg-background px-2 text-sm';
                 <option value="ended">Đã kết thúc</option>
             </select>
 
-            <label class="sr-only" for="filter-type">Loại đấu giá</label>
+            <label class="sr-only" for="filter-type">Hình thức bán</label>
             <select id="filter-type" v-model="form.type" :class="selectClass">
-                <option :value="null">Mọi loại đấu giá</option>
+                <option :value="null">Mọi hình thức</option>
                 <option :value="1">Đấu giá xuôi</option>
                 <option :value="2">Đấu giá ngược</option>
+                <option :value="3">Giá cố định</option>
             </select>
 
             <label class="sr-only" for="filter-city">Khu vực</label>
-            <select
-                id="filter-city"
-                v-model="form.city_id"
-                :class="selectClass"
-            >
-                <option :value="null">Toàn quốc</option>
-                <option v-for="city in cities" :key="city.id" :value="city.id">
-                    {{ city.name }}
-                </option>
-            </select>
+            <div class="w-48">
+                <!-- Not a native control: the form's change event does not fire for it. -->
+                <CitySelect
+                    id="filter-city"
+                    v-model="form.city_id"
+                    all-label="Toàn quốc"
+                    @update:model-value="apply"
+                />
+            </div>
 
             <label class="sr-only" for="filter-sort">Sắp xếp</label>
             <select
@@ -118,6 +118,7 @@ const selectClass = 'h-9 rounded-md border bg-background px-2 text-sm';
             >
                 <option value="ending">Sắp kết thúc</option>
                 <option value="newest">Mới đăng</option>
+                <option value="popular">Xem nhiều nhất</option>
                 <option value="price_asc">Giá tăng dần</option>
                 <option value="price_desc">Giá giảm dần</option>
             </select>

@@ -42,6 +42,7 @@ class ModerationFlowTest extends TestCase
             'city_id' => City::query()->create(['name' => 'Hà Nội'])->id,
             'condition' => 'used',
             'images' => [UploadedFile::fake()->image('a.jpg')],
+            'sale_type' => 'auction',
             'auction_type' => 1,
             'start_price' => 100000,
             'end_time' => now()->addDay()->format('Y-m-d\TH:i'),

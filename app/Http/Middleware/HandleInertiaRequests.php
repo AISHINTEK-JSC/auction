@@ -4,7 +4,10 @@ namespace App\Http\Middleware;
 
 use App\Models\Category;
 use App\Models\City;
+use App\Support\NotificationPresenter;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -17,6 +20,8 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    private const RECENT_NOTIFICATIONS = 8;
 
     /**
      * Determines the current asset version.
@@ -47,6 +52,15 @@ class HandleInertiaRequests extends Middleware
             'categories' => fn () => Category::tree(),
             'cities' => fn () => City::options(),
             'unreadNotifications' => fn () => $request->user()?->unreadNotifications()->count() ?? 0,
+            // For the dropdown under the bell. Optional: only sent when the
+            // dropdown asks for it, so ordinary page loads do not pay for it.
+            'recentNotifications' => Inertia::optional(fn () => array_values(
+                $request->user()?->notifications()
+                    ->limit(self::RECENT_NOTIFICATIONS)
+                    ->get()
+                    ->map(fn (DatabaseNotification $notification) => NotificationPresenter::item($notification))
+                    ->all() ?? [],
+            )),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

@@ -33,6 +33,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $member_code
  * @property Carbon|null $blocked_at
  * @property string|null $block_reason
+ * @property Carbon|null $bid_banned_until
  * @property-read string|null $avatar
  * @property Carbon|null $email_verified_at
  * @property string $password
@@ -64,6 +65,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
             'blocked_at' => 'datetime',
+            'bid_banned_until' => 'datetime',
         ];
     }
 
@@ -88,6 +90,23 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     public function isBlocked(): bool
     {
         return $this->blocked_at !== null;
+    }
+
+    /**
+     * Banned from bidding for a while, after giving up auction results too
+     * often (see App\Services\ForfeitPenalty).
+     */
+    public function isBidBanned(): bool
+    {
+        return $this->bid_banned_until !== null && $this->bid_banned_until->isFuture();
+    }
+
+    /**
+     * @return HasMany<Forfeit, $this>
+     */
+    public function forfeits(): HasMany
+    {
+        return $this->hasMany(Forfeit::class);
     }
 
     public function isAdmin(): bool

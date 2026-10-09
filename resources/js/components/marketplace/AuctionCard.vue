@@ -5,12 +5,13 @@ import {
     Gavel,
     ImageOff,
     MapPin,
+    Tag,
     TrendingDown,
     TrendingUp,
 } from '@lucide/vue';
 import Countdown from '@/components/marketplace/Countdown.vue';
 import { Badge } from '@/components/ui/badge';
-import { formatDateTime, formatVnd } from '@/lib/format';
+import { formatDateTime, formatPrice } from '@/lib/format';
 import { edit, show } from '@/routes/listings';
 import { AuctionStatus, AuctionType } from '@/types';
 import type { ListingCard } from '@/types';
@@ -42,6 +43,15 @@ defineProps<{
             </div>
 
             <Badge
+                v-if="listing.sale_type === 'fixed'"
+                class="absolute top-2 left-2"
+                variant="secondary"
+            >
+                <Tag />
+                Giá cố định
+            </Badge>
+            <Badge
+                v-else
                 class="absolute top-2 left-2"
                 :variant="
                     listing.auction_type === AuctionType.Down
@@ -74,13 +84,21 @@ defineProps<{
             </h3>
 
             <p class="text-base font-semibold text-red-600 dark:text-red-500">
-                {{ formatVnd(listing.winning_price ?? listing.current_price) }}
+                {{ formatPrice(listing) }}
             </p>
 
             <div
                 class="mt-auto flex flex-col gap-1 text-xs text-muted-foreground"
             >
-                <span class="flex items-center gap-1">
+                <!-- A fixed-price listing has no clock and no bids: just its state. -->
+                <span
+                    v-if="listing.sale_type === 'fixed'"
+                    class="flex items-center gap-1"
+                >
+                    <Tag class="size-3.5 shrink-0" />
+                    {{ listing.status_label }}
+                </span>
+                <span v-else class="flex items-center gap-1">
                     <Clock class="size-3.5 shrink-0" />
                     <template v-if="listing.status === AuctionStatus.Running">
                         Còn
@@ -98,7 +116,10 @@ defineProps<{
                     <template v-else>{{ listing.status_label }}</template>
                 </span>
                 <span class="flex items-center justify-between gap-2">
-                    <span class="flex items-center gap-1">
+                    <span
+                        v-if="listing.sale_type !== 'fixed'"
+                        class="flex items-center gap-1"
+                    >
                         <Gavel class="size-3.5 shrink-0" />
                         {{ listing.bid_count }} lượt
                     </span>

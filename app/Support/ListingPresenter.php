@@ -24,16 +24,19 @@ class ListingPresenter
             'title' => $listing->title,
             'image' => $listing->images->first()?->url,
             'city' => $listing->city?->name,
-            'auction_type' => $listing->auction_type->value,
+            'sale_type' => $listing->sale_type->value,
+            'auction_type' => $listing->auction_type?->value,
             'status' => $listing->auction_status->value,
-            'status_label' => $listing->auction_status->label(),
+            'status_label' => $listing->statusLabel(),
             'current_price' => $listing->current_price,
+            'negotiable' => $listing->is_negotiable,
             'bid_count' => $listing->bid_count,
+            'view_count' => $listing->view_count,
             'starts_at' => $listing->start_time?->toIso8601String(),
             'ends_at' => $listing->ends_at?->toIso8601String(),
             'winner' => $listing->auction_status === AuctionStatus::Completed ? $listing->winner?->name : null,
             'winning_price' => $listing->winning_price,
-            'has_auction' => $listing->auction_id !== null,
+            'has_auction' => $listing->isLive(),
             'leader_id' => $listing->leader_id,
             'moderation' => $listing->moderation_status->value,
             'moderation_label' => $listing->moderation_status->label(),
@@ -60,7 +63,7 @@ class ListingPresenter
                 ? ['name' => $listing->category->name, 'slug' => $listing->category->slug]
                 : null,
             'tags' => $listing->tags->map(fn ($tag) => ['name' => $tag->name, 'slug' => $tag->slug])->all(),
-            'auction_type_label' => $listing->auction_type->label(),
+            'auction_type_label' => $listing->auction_type?->label() ?? $listing->sale_type->label(),
             'start_price' => $listing->start_price,
             // The reserve price is the seller's secret.
             'min_bid_price' => $isOwner ? $listing->min_bid_price : null,
@@ -78,9 +81,10 @@ class ListingPresenter
             'can' => [
                 'edit' => $isOwner,
                 'settle' => $settles,
+                'cancel' => $viewer !== null && $viewer->can('cancel', $listing),
+                'mark_sold' => $viewer !== null && $viewer->can('markSold', $listing),
             ],
-            // Only the seller and the winner get the other side's contact details.
-            'contact' => $settles ? self::contact($isOwner ? $listing->winner : $listing->user) : null,
+            'contact' => self::contactFor($listing, $viewer, $settles),
             'my_review' => $settles
                 ? self::review($listing->reviews()->where('reviewer_id', $viewer->id)->first())
                 : null,
@@ -108,6 +112,31 @@ class ListingPresenter
             'rating' => round((float) $user->reviewsReceived()->avg('rating'), 1),
             'review_count' => $user->reviewsReceived()->count(),
         ];
+    }
+
+    /**
+     * Who may see whose contact details:
+     * - after an auction, the seller and the winner see each other's;
+     * - on a fixed-price listing that is for sale, signed-in members with a
+     *   verified email see the seller's. Guests do not, to keep it from scrapers.
+     *
+     * @return array{name: string, email: string, phone: string|null, address: string|null}|null
+     */
+    private static function contactFor(Listing $listing, ?User $viewer, bool $settles): ?array
+    {
+        if ($settles) {
+            return self::contact($viewer?->id === $listing->user_id ? $listing->winner : $listing->user);
+        }
+
+        if ($listing->isFixedPrice()
+            && $listing->auction_status->isOpen()
+            && $viewer !== null
+            && $viewer->id !== $listing->user_id
+            && $viewer->hasVerifiedEmail()) {
+            return self::contact($listing->user);
+        }
+
+        return null;
     }
 
     /**

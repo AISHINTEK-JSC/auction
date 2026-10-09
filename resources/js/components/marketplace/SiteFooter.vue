@@ -90,13 +90,13 @@ const linkClass = 'hover:text-foreground hover:underline underline-offset-4';
                 <ul class="space-y-2 text-muted-foreground">
                     <li>
                         <Link :href="create()" :class="linkClass"
-                            >Đăng tin đấu giá</Link
+                            >Đăng tin</Link
                         >
                     </li>
                     <template v-if="user">
                         <li>
                             <Link :href="dashboard()" :class="linkClass"
-                                >Phiên đấu giá của tôi</Link
+                                >Tin đăng của tôi</Link
                             >
                         </li>
                         <li>

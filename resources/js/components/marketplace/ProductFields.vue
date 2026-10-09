@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { usePage } from '@inertiajs/vue3';
-import { ImagePlus, X } from '@lucide/vue';
+import { ImagePlus, Sparkles, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
+import CategorySelect from '@/components/marketplace/CategorySelect.vue';
+import CitySelect from '@/components/marketplace/CitySelect.vue';
 import RichTextEditor from '@/components/marketplace/RichTextEditor.vue';
+import SearchableSelect from '@/components/marketplace/SearchableSelect.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ProductFormFields } from '@/types';
@@ -26,10 +28,6 @@ const props = defineProps<{
     /** Whether stored images can be dropped. Not when relisting: they are copied as they are. */
     removable?: boolean;
 }>();
-
-const page = usePage();
-const categories = computed(() => page.props.categories);
-const cities = computed(() => page.props.cities);
 
 const kept = computed(() =>
     (props.existingImages ?? []).filter(
@@ -79,9 +77,6 @@ const imageError = computed(
             key.startsWith('images.'),
         )?.[1],
 );
-
-const selectClass =
-    'h-9 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 </script>
 
 <template>
@@ -103,64 +98,33 @@ const selectClass =
         <div class="grid gap-4 sm:grid-cols-3">
             <div class="grid content-start gap-2">
                 <Label for="category_id">Danh mục</Label>
-                <select
+                <CategorySelect
                     id="category_id"
                     v-model="form.category_id"
-                    required
-                    :class="selectClass"
-                >
-                    <option :value="null" disabled>Chọn danh mục</option>
-                    <template v-for="category in categories" :key="category.id">
-                        <option :value="category.id">
-                            {{ category.name }}
-                        </option>
-                        <option
-                            v-for="child in category.children"
-                            :key="child.id"
-                            :value="child.id"
-                        >
-                            — {{ child.name }}
-                        </option>
-                    </template>
-                </select>
+                    placeholder="Chọn danh mục"
+                />
                 <InputError :message="errors.category_id" />
             </div>
 
             <div class="grid content-start gap-2">
                 <Label for="city_id">Tỉnh / thành phố</Label>
-                <select
+                <CitySelect
                     id="city_id"
                     v-model="form.city_id"
-                    required
-                    :class="selectClass"
-                >
-                    <option :value="null" disabled>Chọn khu vực</option>
-                    <option
-                        v-for="city in cities"
-                        :key="city.id"
-                        :value="city.id"
-                    >
-                        {{ city.name }}
-                    </option>
-                </select>
+                    placeholder="Chọn khu vực"
+                />
                 <InputError :message="errors.city_id" />
             </div>
 
             <div class="grid content-start gap-2">
                 <Label for="condition">Tình trạng</Label>
-                <select
+                <SearchableSelect
                     id="condition"
                     v-model="form.condition"
-                    :class="selectClass"
-                >
-                    <option
-                        v-for="condition in conditions"
-                        :key="condition.value"
-                        :value="condition.value"
-                    >
-                        {{ condition.label }}
-                    </option>
-                </select>
+                    :options="conditions"
+                    :icon="Sparkles"
+                    placeholder="Chọn tình trạng"
+                />
                 <InputError :message="errors.condition" />
             </div>
         </div>

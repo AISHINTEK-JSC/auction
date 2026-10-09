@@ -5,7 +5,7 @@ import { computed, ref } from 'vue';
 import AuctionCard from '@/components/marketplace/AuctionCard.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { create, destroy, edit, relist } from '@/routes/listings';
+import { create, destroy, edit, relist, sold } from '@/routes/listings';
 import { AuctionStatus } from '@/types';
 import type { DashboardCard, Seller } from '@/types';
 
@@ -60,22 +60,33 @@ const listings = computed(() => props[active.value]);
 const activeTab = computed(() => tabs.find((tab) => tab.key === active.value)!);
 
 function cancel(listing: DashboardCard) {
-    if (window.confirm(`Huỷ phiên đấu giá “${listing.title}”?`)) {
+    const question =
+        listing.sale_type === 'fixed'
+            ? `Gỡ tin “${listing.title}”?`
+            : `Huỷ phiên đấu giá “${listing.title}”?`;
+
+    if (window.confirm(question)) {
         router.delete(destroy(listing.id).url, { preserveScroll: true });
+    }
+}
+
+function markSold(listing: DashboardCard) {
+    if (window.confirm(`Đánh dấu “${listing.title}” là đã bán?`)) {
+        router.post(sold(listing.id).url, {}, { preserveScroll: true });
     }
 }
 </script>
 
 <template>
-    <Head title="Phiên đấu giá của tôi" />
+    <Head title="Tin đăng của tôi" />
 
     <div class="space-y-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 class="text-2xl font-semibold">Phiên đấu giá của tôi</h1>
+                <h1 class="text-2xl font-semibold">Tin đăng của tôi</h1>
                 <p class="text-sm text-muted-foreground">
                     {{ seller.listing_count }} tin đã đăng ·
-                    {{ seller.sold_count }} phiên thành công
+                    {{ seller.sold_count }} giao dịch thành công
                     <template v-if="seller.review_count">
                         · {{ seller.rating }}/5 từ
                         {{ seller.review_count }} đánh giá
@@ -85,7 +96,7 @@ function cancel(listing: DashboardCard) {
             <Button as-child>
                 <Link :href="create()">
                     <Plus class="size-4" />
-                    Đăng tin đấu giá
+                    Đăng tin
                 </Link>
             </Button>
         </div>
@@ -168,7 +179,19 @@ function cancel(listing: DashboardCard) {
                         class="flex-1"
                         @click="cancel(listing)"
                     >
-                        Huỷ phiên
+                        {{
+                            listing.sale_type === 'fixed'
+                                ? 'Gỡ tin'
+                                : 'Huỷ phiên'
+                        }}
+                    </Button>
+                    <Button
+                        v-if="listing.can.mark_sold"
+                        size="sm"
+                        class="flex-1"
+                        @click="markSold(listing)"
+                    >
+                        Đã bán
                     </Button>
                     <Button
                         v-if="listing.can.relist"

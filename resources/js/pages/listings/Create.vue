@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { Banknote, CalendarClock } from '@lucide/vue';
+import { Banknote, CalendarClock, Gavel, Tag } from '@lucide/vue';
 import { computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import MoneyInput from '@/components/marketplace/MoneyInput.vue';
@@ -16,7 +16,9 @@ import type { EditableListing } from '@/types';
 
 /** A finished listing being put up again: everything but the times is carried over. */
 type Source = EditableListing & {
-    auction_type: number;
+    sale_type: 'auction' | 'fixed';
+    is_negotiable: boolean;
+    auction_type: number | null;
     start_price: number;
     min_bid_price: number | null;
     bid_step: number | null;
@@ -28,6 +30,8 @@ type Source = EditableListing & {
 
 const props = defineProps<{
     conditions: { value: string; label: string }[];
+    /** How long a fixed-price listing stays up. */
+    fixedListingDays: number;
     source: Source | null;
 }>();
 
@@ -42,6 +46,8 @@ const form = useForm({
     condition: source?.condition ?? 'used',
     images: [] as File[],
     tags: [...(source?.tags ?? [])],
+    sale_type: source?.sale_type ?? 'auction',
+    is_negotiable: source?.is_negotiable ?? false,
     auction_type: source?.auction_type ?? (AuctionType.Up as number),
     start_time: '',
     start_price: (source?.start_price ?? '') as number | '',
@@ -55,7 +61,12 @@ const form = useForm({
 });
 
 const isUp = computed(() => form.auction_type === AuctionType.Up);
-const heading = source ? 'Đăng lại tin đấu giá' : 'Đăng tin đấu giá';
+const isFixed = computed(() => form.sale_type === 'fixed');
+const heading = source ? 'Đăng lại tin' : 'Đăng tin';
+
+const saleTypeError = computed(
+    () => (form.errors as Record<string, string | undefined>).sale_type,
+);
 
 // Set by the server when the auction engine refuses the auction as a whole.
 const engineError = computed(() => {
@@ -192,234 +203,325 @@ function submit() {
         />
 
         <section class="space-y-5 rounded-lg border bg-background p-4">
-            <h2 class="font-semibold">Phiên đấu giá</h2>
+            <h2 class="font-semibold">Hình thức bán</h2>
 
             <fieldset class="grid gap-2 sm:grid-cols-2">
-                <legend class="sr-only">Loại đấu giá</legend>
+                <legend class="sr-only">Hình thức bán</legend>
                 <label
                     v-for="option in [
                         {
-                            value: AuctionType.Up,
-                            title: 'Đấu giá xuôi',
-                            text: 'Giá tăng dần, người đặt cao nhất khi hết giờ sẽ thắng.',
+                            value: 'auction',
+                            icon: Gavel,
+                            title: 'Đấu giá',
+                            text: 'Người mua trả giá, người thắng do phiên đấu giá quyết định.',
                         },
                         {
-                            value: AuctionType.Down,
-                            title: 'Đấu giá ngược',
-                            text: 'Giá giảm dần theo chu kỳ, người mua đầu tiên sẽ thắng.',
+                            value: 'fixed',
+                            icon: Tag,
+                            title: 'Chỉ đăng tin',
+                            text: 'Đăng với một mức giá. Người mua liên hệ trực tiếp với bạn.',
                         },
                     ]"
                     :key="option.value"
                     class="flex cursor-pointer gap-3 rounded-md border p-3"
                     :class="{
                         'border-primary ring-1 ring-primary':
-                            form.auction_type === option.value,
+                            form.sale_type === option.value,
                     }"
                 >
                     <input
-                        v-model="form.auction_type"
+                        v-model="form.sale_type"
                         type="radio"
-                        name="auction_type"
+                        name="sale_type"
                         :value="option.value"
                         class="mt-1"
                     />
                     <span>
-                        <span class="block text-sm font-medium">{{
-                            option.title
-                        }}</span>
+                        <span
+                            class="flex items-center gap-1.5 text-sm font-medium"
+                        >
+                            <component :is="option.icon" class="size-4" />
+                            {{ option.title }}
+                        </span>
                         <span class="text-xs text-muted-foreground">{{
                             option.text
                         }}</span>
                     </span>
                 </label>
             </fieldset>
-            <InputError :message="form.errors.auction_type" />
+            <InputError :message="saleTypeError" />
 
-            <!-- When -->
-            <div class="space-y-3">
-                <h3
-                    class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-                >
-                    <CalendarClock class="size-4" />
-                    Thời gian
-                </h3>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="grid content-start gap-2">
-                        <Label for="start_time">Bắt đầu</Label>
-                        <Input
-                            id="start_time"
-                            v-model="form.start_time"
-                            type="datetime-local"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Để trống để bắt đầu ngay.
-                        </p>
-                        <InputError :message="form.errors.start_time" />
-                    </div>
-
-                    <div v-if="isUp" class="grid content-start gap-2">
-                        <Label for="end_time">Kết thúc</Label>
-                        <Input
-                            id="end_time"
-                            v-model="form.end_time"
-                            type="datetime-local"
-                            required
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Sau lúc bắt đầu ít nhất 5 phút.
-                        </p>
-                        <InputError :message="form.errors.end_time" />
-                    </div>
-
-                    <div v-else class="grid content-start gap-2">
-                        <Label for="down_minutes">Chu kỳ giảm giá (phút)</Label>
-                        <Input
-                            id="down_minutes"
-                            v-model.number="form.down_minutes"
-                            type="number"
-                            min="1"
-                            max="1440"
-                            required
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Mỗi chu kỳ giá giảm một lần.
-                        </p>
-                        <InputError :message="form.errors.down_minutes" />
-                    </div>
-                </div>
-
-                <div
-                    v-if="isUp"
-                    class="flex flex-wrap items-center gap-2 text-sm"
-                >
-                    <span class="text-muted-foreground">Kéo dài:</span>
-                    <button
-                        v-for="preset in durationPresets"
-                        :key="preset.minutes"
-                        type="button"
-                        class="rounded-full border px-3 py-1 text-xs hover:bg-accent"
-                        :class="{
-                            'border-primary bg-primary text-primary-foreground hover:bg-primary':
-                                durationMinutes === preset.minutes,
-                        }"
-                        :aria-pressed="durationMinutes === preset.minutes"
-                        @click="setDuration(preset.minutes)"
+            <!-- Fixed price: one field, nothing goes to the auction engine. -->
+            <div v-if="isFixed" class="space-y-3 border-t pt-4">
+                <div class="grid content-start gap-2 sm:max-w-xs">
+                    <Label for="start_price">Giá bán</Label>
+                    <MoneyInput
+                        v-if="!form.is_negotiable"
+                        id="start_price"
+                        v-model="form.start_price"
+                        required
+                    />
+                    <p
+                        v-else
+                        class="flex h-9 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground"
                     >
-                        {{ preset.label }}
-                    </button>
+                        Thoả thuận
+                    </p>
+                    <InputError :message="form.errors.start_price" />
+                    <label class="flex items-center gap-2 text-sm">
+                        <input v-model="form.is_negotiable" type="checkbox" />
+                        Giá thoả thuận (không ghi giá)
+                    </label>
                 </div>
-
-                <p
-                    v-if="timingSummary"
-                    class="rounded-md bg-muted/50 px-3 py-2 text-sm"
-                    role="status"
-                >
-                    {{ timingSummary }}
+                <p class="rounded-md bg-muted/50 px-3 py-2 text-sm">
+                    Tin hiển thị trong {{ fixedListingDays }} ngày, hoặc tới khi
+                    bạn đánh dấu "Đã bán" hay gỡ tin; hết hạn thì đăng lại được.
+                    Thành viên đã đăng nhập sẽ thấy email và số điện thoại của
+                    bạn để liên hệ.
                 </p>
             </div>
 
-            <!-- How much -->
-            <div class="space-y-3 border-t pt-4">
-                <h3
-                    class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
-                >
-                    <Banknote class="size-4" />
-                    Giá
-                </h3>
+            <template v-else>
+                <h3 class="border-t pt-4 text-sm font-medium">Loại đấu giá</h3>
 
-                <div class="grid gap-4 sm:grid-cols-3">
-                    <div class="grid content-start gap-2">
-                        <Label for="start_price">Giá khởi điểm</Label>
-                        <MoneyInput
-                            id="start_price"
-                            v-model="form.start_price"
-                            required
+                <fieldset class="grid gap-2 sm:grid-cols-2">
+                    <legend class="sr-only">Loại đấu giá</legend>
+                    <label
+                        v-for="option in [
+                            {
+                                value: AuctionType.Up,
+                                title: 'Đấu giá xuôi',
+                                text: 'Giá tăng dần, người đặt cao nhất khi hết giờ sẽ thắng.',
+                            },
+                            {
+                                value: AuctionType.Down,
+                                title: 'Đấu giá ngược',
+                                text: 'Giá giảm dần theo chu kỳ, người mua đầu tiên sẽ thắng.',
+                            },
+                        ]"
+                        :key="option.value"
+                        class="flex cursor-pointer gap-3 rounded-md border p-3"
+                        :class="{
+                            'border-primary ring-1 ring-primary':
+                                form.auction_type === option.value,
+                        }"
+                    >
+                        <input
+                            v-model="form.auction_type"
+                            type="radio"
+                            name="auction_type"
+                            :value="option.value"
+                            class="mt-1"
                         />
-                        <InputError :message="form.errors.start_price" />
-                    </div>
+                        <span>
+                            <span class="block text-sm font-medium">{{
+                                option.title
+                            }}</span>
+                            <span class="text-xs text-muted-foreground">{{
+                                option.text
+                            }}</span>
+                        </span>
+                    </label>
+                </fieldset>
+                <InputError :message="form.errors.auction_type" />
 
-                    <template v-if="isUp">
-                        <div class="grid content-start gap-2">
-                            <Label for="bid_step">Bước giá (tuỳ chọn)</Label>
-                            <MoneyInput id="bid_step" v-model="form.bid_step" />
-                            <p class="text-xs text-muted-foreground">
-                                Mức tăng tối thiểu mỗi lượt đặt.
-                            </p>
-                            <InputError :message="form.errors.bid_step" />
-                        </div>
+                <!-- When -->
+                <div class="space-y-3">
+                    <h3
+                        class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+                    >
+                        <CalendarClock class="size-4" />
+                        Thời gian
+                    </h3>
 
+                    <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid content-start gap-2">
-                            <Label for="min_bid_price"
-                                >Giá sàn (tuỳ chọn)</Label
-                            >
-                            <MoneyInput
-                                id="min_bid_price"
-                                v-model="form.min_bid_price"
+                            <Label for="start_time">Bắt đầu</Label>
+                            <Input
+                                id="start_time"
+                                v-model="form.start_time"
+                                type="datetime-local"
                             />
                             <p class="text-xs text-muted-foreground">
-                                Giá thấp nhất bạn chịu bán. Người mua không
-                                thấy.
+                                Để trống để bắt đầu ngay.
                             </p>
-                            <InputError :message="form.errors.min_bid_price" />
+                            <InputError :message="form.errors.start_time" />
                         </div>
-                    </template>
 
-                    <template v-else>
-                        <div class="grid content-start gap-2">
-                            <Label for="down_price">Mỗi lần giảm</Label>
-                            <MoneyInput
-                                id="down_price"
-                                v-model="form.down_price"
+                        <div v-if="isUp" class="grid content-start gap-2">
+                            <Label for="end_time">Kết thúc</Label>
+                            <Input
+                                id="end_time"
+                                v-model="form.end_time"
+                                type="datetime-local"
                                 required
                             />
-                            <InputError :message="form.errors.down_price" />
+                            <p class="text-xs text-muted-foreground">
+                                Sau lúc bắt đầu ít nhất 5 phút.
+                            </p>
+                            <InputError :message="form.errors.end_time" />
                         </div>
 
-                        <div class="grid content-start gap-2">
-                            <Label for="finish_price"
-                                >Giá thấp nhất (tuỳ chọn)</Label
+                        <div v-else class="grid content-start gap-2">
+                            <Label for="down_minutes"
+                                >Chu kỳ giảm giá (phút)</Label
                             >
-                            <MoneyInput
-                                id="finish_price"
-                                v-model="form.finish_price"
+                            <Input
+                                id="down_minutes"
+                                v-model.number="form.down_minutes"
+                                type="number"
+                                min="1"
+                                max="1440"
+                                required
                             />
                             <p class="text-xs text-muted-foreground">
-                                Giá ngừng giảm ở mức này.
+                                Mỗi chu kỳ giá giảm một lần.
                             </p>
-                            <InputError :message="form.errors.finish_price" />
+                            <InputError :message="form.errors.down_minutes" />
                         </div>
-                    </template>
+                    </div>
+
+                    <div
+                        v-if="isUp"
+                        class="flex flex-wrap items-center gap-2 text-sm"
+                    >
+                        <span class="text-muted-foreground">Kéo dài:</span>
+                        <button
+                            v-for="preset in durationPresets"
+                            :key="preset.minutes"
+                            type="button"
+                            class="rounded-full border px-3 py-1 text-xs hover:bg-accent"
+                            :class="{
+                                'border-primary bg-primary text-primary-foreground hover:bg-primary':
+                                    durationMinutes === preset.minutes,
+                            }"
+                            :aria-pressed="durationMinutes === preset.minutes"
+                            @click="setDuration(preset.minutes)"
+                        >
+                            {{ preset.label }}
+                        </button>
+                    </div>
+
+                    <p
+                        v-if="timingSummary"
+                        class="rounded-md bg-muted/50 px-3 py-2 text-sm"
+                        role="status"
+                    >
+                        {{ timingSummary }}
+                    </p>
                 </div>
 
-                <p
-                    v-if="priceSummary"
-                    class="rounded-md bg-muted/50 px-3 py-2 text-sm"
-                    role="status"
-                >
-                    {{ priceSummary }}
-                </p>
-            </div>
-
-            <label
-                v-if="isUp"
-                class="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm"
-            >
-                <input
-                    v-model="form.auto_extend"
-                    type="checkbox"
-                    class="mt-0.5"
-                />
-                <span>
-                    <span class="block font-medium"
-                        >Tự động gia hạn 5 phút</span
+                <!-- How much -->
+                <div class="space-y-3 border-t pt-4">
+                    <h3
+                        class="flex items-center gap-2 text-sm font-medium text-muted-foreground"
                     >
-                    <span class="text-xs text-muted-foreground">
-                        Khi có người đặt giá ở phút chót, phiên được kéo dài để
-                        người khác kịp trả giá.
+                        <Banknote class="size-4" />
+                        Giá
+                    </h3>
+
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <div class="grid content-start gap-2">
+                            <Label for="start_price">Giá khởi điểm</Label>
+                            <MoneyInput
+                                id="start_price"
+                                v-model="form.start_price"
+                                required
+                            />
+                            <InputError :message="form.errors.start_price" />
+                        </div>
+
+                        <template v-if="isUp">
+                            <div class="grid content-start gap-2">
+                                <Label for="bid_step"
+                                    >Bước giá (tuỳ chọn)</Label
+                                >
+                                <MoneyInput
+                                    id="bid_step"
+                                    v-model="form.bid_step"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Mức tăng tối thiểu mỗi lượt đặt.
+                                </p>
+                                <InputError :message="form.errors.bid_step" />
+                            </div>
+
+                            <div class="grid content-start gap-2">
+                                <Label for="min_bid_price"
+                                    >Giá sàn (tuỳ chọn)</Label
+                                >
+                                <MoneyInput
+                                    id="min_bid_price"
+                                    v-model="form.min_bid_price"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Giá thấp nhất bạn chịu bán. Người mua không
+                                    thấy.
+                                </p>
+                                <InputError
+                                    :message="form.errors.min_bid_price"
+                                />
+                            </div>
+                        </template>
+
+                        <template v-else>
+                            <div class="grid content-start gap-2">
+                                <Label for="down_price">Mỗi lần giảm</Label>
+                                <MoneyInput
+                                    id="down_price"
+                                    v-model="form.down_price"
+                                    required
+                                />
+                                <InputError :message="form.errors.down_price" />
+                            </div>
+
+                            <div class="grid content-start gap-2">
+                                <Label for="finish_price"
+                                    >Giá thấp nhất (tuỳ chọn)</Label
+                                >
+                                <MoneyInput
+                                    id="finish_price"
+                                    v-model="form.finish_price"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Giá ngừng giảm ở mức này.
+                                </p>
+                                <InputError
+                                    :message="form.errors.finish_price"
+                                />
+                            </div>
+                        </template>
+                    </div>
+
+                    <p
+                        v-if="priceSummary"
+                        class="rounded-md bg-muted/50 px-3 py-2 text-sm"
+                        role="status"
+                    >
+                        {{ priceSummary }}
+                    </p>
+                </div>
+
+                <label
+                    v-if="isUp"
+                    class="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm"
+                >
+                    <input
+                        v-model="form.auto_extend"
+                        type="checkbox"
+                        class="mt-0.5"
+                    />
+                    <span>
+                        <span class="block font-medium"
+                            >Tự động gia hạn 5 phút</span
+                        >
+                        <span class="text-xs text-muted-foreground">
+                            Khi có người đặt giá ở phút chót, phiên được kéo dài
+                            để người khác kịp trả giá.
+                        </span>
                     </span>
-                </span>
-            </label>
+                </label>
+            </template>
         </section>
 
         <div class="flex justify-end">

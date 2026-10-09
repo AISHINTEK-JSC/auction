@@ -5,6 +5,7 @@ namespace App\Filament\Resources\UnlockRequests;
 use App\Filament\Resources\UnlockRequests\Pages\ManageUnlockRequests;
 use App\Models\UnlockRequest;
 use App\Models\User;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -63,6 +64,10 @@ class UnlockRequestResource extends Resource
                         $user?->forceFill(['blocked_at' => null, 'block_reason' => null])->save();
                         $record->update(['handled_at' => now()]);
 
+                        if ($user) {
+                            AdminLog::record('user.unblocked', $user, sprintf('Mở khoá tài khoản %s (%s) theo yêu cầu mở khoá', $user->name, $user->email));
+                        }
+
                         Notification::make()
                             ->title($user ? 'Đã mở khoá tài khoản' : 'Không có tài khoản nào dùng email này')
                             ->{$user ? 'success' : 'warning'}()
@@ -70,7 +75,11 @@ class UnlockRequestResource extends Resource
                     }),
                 Action::make('dismiss')->label('Bỏ qua')->icon(Heroicon::OutlinedXMark)->color('gray')
                     ->visible(fn (UnlockRequest $record) => $record->handled_at === null)
-                    ->action(fn (UnlockRequest $record) => $record->update(['handled_at' => now()])),
+                    ->action(function (UnlockRequest $record): void {
+                        $record->update(['handled_at' => now()]);
+
+                        AdminLog::record('unlock_request.dismissed', $record, 'Bỏ qua yêu cầu mở khoá của '.$record->email);
+                    }),
             ]);
     }
 

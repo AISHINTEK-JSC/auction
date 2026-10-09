@@ -24,6 +24,7 @@ class SyncAuctions extends Command
     {
         $listings = Listing::query()
             ->published()
+            ->whereNotNull('auction_id')
             ->whereIn('auction_status', AuctionStatus::openValues())
             ->get();
 

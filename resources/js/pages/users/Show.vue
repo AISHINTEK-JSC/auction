@@ -38,7 +38,7 @@ defineProps<{
                 <p class="text-sm text-muted-foreground">
                     Tham gia từ {{ formatDateTime(member.joined_at) }} ·
                     {{ member.listing_count }} tin đăng ·
-                    {{ member.sold_count }} phiên thành công
+                    {{ member.sold_count }} giao dịch thành công
                 </p>
                 <p
                     class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"

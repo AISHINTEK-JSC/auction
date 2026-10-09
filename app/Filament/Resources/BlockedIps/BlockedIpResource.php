@@ -5,6 +5,7 @@ namespace App\Filament\Resources\BlockedIps;
 use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\BlockedIps\Pages\ManageBlockedIps;
 use App\Models\BlockedIp;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -53,8 +54,8 @@ class BlockedIpResource extends Resource
                 TextColumn::make('created_at')->label('Thêm lúc')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()->after(fn (BlockedIp $record) => AdminLog::record('blocked_ip.updated', $record, 'Sửa IP bị chặn "'.$record->address.'"')),
+                DeleteAction::make()->before(fn (BlockedIp $record) => AdminLog::record('blocked_ip.deleted', $record, 'Xoá IP bị chặn "'.$record->address.'"')),
             ]);
     }
 

@@ -15,7 +15,7 @@ class ListingPolicy
      */
     public function view(?User $user, Listing $listing): bool
     {
-        if ($listing->auction_id === null) {
+        if (! $listing->isLive()) {
             return false;
         }
 
@@ -32,12 +32,23 @@ class ListingPolicy
     }
 
     /**
-     * Only the seller may cancel, and only while the auction is still open.
+     * Only the seller may cancel the auction or take the post down, and only
+     * while it is still open.
      */
     public function cancel(User $user, Listing $listing): bool
     {
         return $user->id === $listing->user_id
-            && $listing->auction_id !== null
+            && $listing->isLive()
+            && $listing->auction_status->isOpen();
+    }
+
+    /**
+     * A fixed-price listing is closed by its seller once the item is sold.
+     */
+    public function markSold(User $user, Listing $listing): bool
+    {
+        return $user->id === $listing->user_id
+            && $listing->isFixedPrice()
             && $listing->auction_status->isOpen();
     }
 
@@ -55,7 +66,7 @@ class ListingPolicy
             return true;
         }
 
-        return $listing->auction_id !== null
+        return $listing->isLive()
             && ! $listing->auction_status->isOpen()
             && $listing->auction_status !== AuctionStatus::Completed;
     }

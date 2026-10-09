@@ -7,6 +7,7 @@ use App\Enums\ReportReason;
 use App\Filament\Resources\Reports\Pages\ManageReports;
 use App\Models\ListingReport;
 use App\Services\ListingModeration;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -86,7 +87,16 @@ class ReportResource extends Resource
                     }),
                 Action::make('dismiss')->label('Bỏ qua')->icon(Heroicon::OutlinedXMark)->color('gray')
                     ->visible(fn (ListingReport $record) => $record->handled_at === null)
-                    ->action(fn (ListingReport $record) => $record->update(['handled_at' => now(), 'handled_by' => auth()->id()])),
+                    ->action(function (ListingReport $record): void {
+                        $record->update(['handled_at' => now(), 'handled_by' => auth()->id()]);
+
+                        AdminLog::record('report.dismissed', $record->listing, sprintf(
+                            'Bỏ qua báo cáo "%s" về tin #%d "%s"',
+                            $record->reason->label(),
+                            $record->listing_id,
+                            $record->listing->title,
+                        ));
+                    }),
             ]);
     }
 

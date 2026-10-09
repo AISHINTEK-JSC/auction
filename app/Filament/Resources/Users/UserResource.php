@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -72,6 +73,12 @@ class UserResource extends Resource
                 TextColumn::make('member_code')->label('Mã số')->searchable(),
                 TextColumn::make('blocked_at')->label('Khoá lúc')->dateTime('d/m/Y H:i')->placeholder('—')
                     ->description(fn (User $record) => $record->block_reason),
+                // Times the member gave up an auction result within the penalty window.
+                TextColumn::make('recent_forfeits_count')->label('Từ bỏ gần đây')
+                    ->counts(['forfeits as recent_forfeits_count' => fn ($query) => $query
+                        ->where('created_at', '>=', now()->subDays((int) config('marketplace.forfeit_window_days')))])
+                    ->sortable(),
+                TextColumn::make('bid_banned_until')->label('Cấm đặt giá tới')->dateTime('d/m/Y H:i')->placeholder('—'),
                 TextColumn::make('created_at')->label('Tham gia')->dateTime('d/m/Y')->sortable(),
             ])
             ->filters([
@@ -83,14 +90,36 @@ class UserResource extends Resource
                     ->schema([
                         TextInput::make('block_reason')->label('Lý do')->maxLength(255),
                     ])
-                    ->action(fn (User $record, array $data) => $record->forceFill([
-                        'blocked_at' => now(),
-                        'block_reason' => $data['block_reason'] ?? null,
-                    ])->save()),
+                    ->action(function (User $record, array $data): void {
+                        $record->forceFill([
+                            'blocked_at' => now(),
+                            'block_reason' => $data['block_reason'] ?? null,
+                        ])->save();
+
+                        AdminLog::record('user.blocked', $record, sprintf(
+                            'Khoá tài khoản %s (%s)%s',
+                            $record->name,
+                            $record->email,
+                            $record->block_reason ? ' — lý do: '.$record->block_reason : '',
+                        ));
+                    }),
                 Action::make('unblock')->label('Mở khoá')->icon(Heroicon::OutlinedLockOpen)
                     ->visible(fn (User $record) => $record->isBlocked())
                     ->requiresConfirmation()
-                    ->action(fn (User $record) => $record->forceFill(['blocked_at' => null, 'block_reason' => null])->save()),
+                    ->action(function (User $record): void {
+                        $record->forceFill(['blocked_at' => null, 'block_reason' => null])->save();
+
+                        AdminLog::record('user.unblocked', $record, sprintf('Mở khoá tài khoản %s (%s)', $record->name, $record->email));
+                    }),
+                Action::make('liftBidBan')->label('Gỡ cấm đặt giá')->icon(Heroicon::OutlinedHandRaised)->color('gray')
+                    ->visible(fn (User $record) => $record->isBidBanned())
+                    ->requiresConfirmation()
+                    ->modalDescription('Thành viên này bị tạm khoá đặt giá vì đã từ bỏ kết quả đấu giá nhiều lần. Gỡ cấm cho phép họ đặt giá lại ngay.')
+                    ->action(function (User $record): void {
+                        $record->forceFill(['bid_banned_until' => null])->save();
+
+                        AdminLog::record('user.bid_ban_lifted', $record, sprintf('Gỡ cấm đặt giá cho %s (%s)', $record->name, $record->email));
+                    }),
                 Action::make('changeRole')->label('Đổi vai trò')->icon(Heroicon::OutlinedShieldCheck)->color('gray')
                     ->visible(fn (User $record) => ! $record->is(auth()->user()))
                     ->fillForm(fn (User $record): array => ['role' => $record->role->value])
@@ -99,8 +128,19 @@ class UserResource extends Resource
                             ->options(collect(UserRole::cases())->mapWithKeys(fn (UserRole $role) => [$role->value => $role->label()])),
                     ])
                     // role is deliberately not mass assignable.
-                    ->action(fn (User $record, array $data) => $record->forceFill(['role' => $data['role']])->save()),
-                EditAction::make(),
+                    ->action(function (User $record, array $data): void {
+                        $from = $record->role->label();
+                        $record->forceFill(['role' => $data['role']])->save();
+
+                        AdminLog::record('user.role_changed', $record, sprintf(
+                            'Đổi vai trò của %s (%s): %s → %s',
+                            $record->name,
+                            $record->email,
+                            $from,
+                            $record->refresh()->role->label(),
+                        ));
+                    }),
+                EditAction::make()->after(fn (User $record) => AdminLog::record('user.updated', $record, sprintf('Sửa thông tin thành viên %s (%s)', $record->name, $record->email))),
             ]);
     }
 

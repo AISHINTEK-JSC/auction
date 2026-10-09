@@ -83,6 +83,33 @@ class MarketplaceNotification extends Notification
         ), self::listingUrl($listing));
     }
 
+    public static function expired(Listing $listing): self
+    {
+        return new self('expired', 'Tin đăng của bạn đã hết hạn', sprintf(
+            'Tin "%s" đã hết thời gian hiển thị. Bạn có thể đăng lại từ trang tin đăng của tôi.',
+            $listing->title,
+        ), route('dashboard', absolute: false));
+    }
+
+    public static function forfeitWarning(Listing $listing, ?int $nextBanDays): self
+    {
+        return new self('forfeit_warning', 'Bạn đã từ bỏ một kết quả đấu giá', sprintf(
+            'Kết quả phiên "%s" đã được chuyển cho người khác.%s',
+            $listing->title,
+            $nextBanDays ? " Nếu từ bỏ thêm lần nữa, bạn sẽ bị tạm khoá đặt giá {$nextBanDays} ngày." : '',
+        ), self::listingUrl($listing));
+    }
+
+    public static function bidBan(Listing $listing, \DateTimeInterface $until, int $count): self
+    {
+        return new self('bid_ban', 'Bạn bị tạm khoá đặt giá', sprintf(
+            'Bạn đã từ bỏ kết quả đấu giá %d lần gần đây (lần này: "%s"). Bạn không thể đặt giá cho tới %s.',
+            $count,
+            $listing->title,
+            $until->format('H:i d/m/Y'),
+        ), self::listingUrl($listing));
+    }
+
     public static function moderated(Listing $listing): self
     {
         $status = $listing->moderation_status;

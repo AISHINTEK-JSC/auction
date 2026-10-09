@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import {
-    Bell,
     ChevronDown,
     Gavel,
     Gift,
@@ -12,6 +11,8 @@ import {
     Shield,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import CitySelect from '@/components/marketplace/CitySelect.vue';
+import NotificationBell from '@/components/marketplace/NotificationBell.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,24 +37,23 @@ import { dashboard, home, login, register } from '@/routes';
 import { show as categoryShow } from '@/routes/categories';
 import { index as giveawaysIndex } from '@/routes/giveaways';
 import { create, index } from '@/routes/listings';
-import { index as notificationsIndex } from '@/routes/notifications';
 
 const page = usePage();
 const user = useAuthUser();
 const categories = computed(() => page.props.categories);
-const cities = computed(() => page.props.cities);
-const unread = computed(() => page.props.unreadNotifications ?? 0);
 
 const query = new URLSearchParams(page.url.split('?')[1] ?? '');
 const term = ref(query.get('q') ?? '');
-const cityId = ref(query.get('city_id') ?? '');
+const cityId = ref<number | null>(
+    query.get('city_id') ? Number(query.get('city_id')) : null,
+);
 
 function search() {
     router.get(
         index({
             query: {
                 q: term.value || undefined,
-                city_id: cityId.value || undefined,
+                city_id: cityId.value ?? undefined,
             },
         }).url,
     );
@@ -126,20 +126,9 @@ function search() {
                 role="search"
                 @submit.prevent="search"
             >
-                <select
-                    v-model="cityId"
-                    aria-label="Tỉnh / thành phố"
-                    class="hidden h-9 w-40 shrink-0 rounded-md border bg-background px-2 text-sm md:block"
-                >
-                    <option value="">Toàn quốc</option>
-                    <option
-                        v-for="city in cities"
-                        :key="city.id"
-                        :value="String(city.id)"
-                    >
-                        {{ city.name }}
-                    </option>
-                </select>
+                <div class="hidden w-44 shrink-0 md:block">
+                    <CitySelect v-model="cityId" all-label="Toàn quốc" />
+                </div>
                 <div class="relative min-w-0 flex-1">
                     <Search
                         class="absolute top-2.5 left-2.5 size-4 text-muted-foreground"
@@ -161,28 +150,7 @@ function search() {
                 </Link>
             </Button>
 
-            <Button
-                v-if="user"
-                variant="ghost"
-                size="icon"
-                class="relative size-9 shrink-0"
-                as-child
-            >
-                <Link
-                    :href="notificationsIndex()"
-                    :aria-label="
-                        unread ? `Thông báo, ${unread} chưa đọc` : 'Thông báo'
-                    "
-                >
-                    <Bell class="size-5" />
-                    <span
-                        v-if="unread"
-                        class="absolute -top-0.5 -right-0.5 flex min-w-4.5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-4.5 font-semibold text-white"
-                    >
-                        {{ unread > 99 ? '99+' : unread }}
-                    </span>
-                </Link>
-            </Button>
+            <NotificationBell v-if="user" />
 
             <DropdownMenu v-if="user">
                 <DropdownMenuTrigger as-child>
@@ -211,7 +179,7 @@ function search() {
                             class="block w-full cursor-pointer"
                         >
                             <LayoutGrid class="mr-2 size-4" />
-                            Phiên đấu giá của tôi
+                            Tin đăng của tôi
                         </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem v-if="user.role !== 'user'" as-child>

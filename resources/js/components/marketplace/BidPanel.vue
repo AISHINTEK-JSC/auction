@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuthUser } from '@/composables/useAuthUser';
-import { formatVnd } from '@/lib/format';
+import { formatDateTime, formatVnd } from '@/lib/format';
 import { login } from '@/routes';
 import { store } from '@/routes/listings/bids';
 import { AuctionType, BidType } from '@/types';
@@ -20,6 +20,13 @@ const props = defineProps<{
 
 const user = useAuthUser();
 const isDown = computed(() => props.listing.auction_type === AuctionType.Down);
+
+// The server refuses bids from a banned member; say so instead of showing the form.
+const bannedUntil = computed(() => {
+    const until = user.value?.bid_banned_until;
+
+    return until && new Date(until).getTime() > Date.now() ? until : null;
+});
 
 const form = useForm<{ bid_type: number; bid_price: number | '' }>({
     bid_type: BidType.Limit,
@@ -75,6 +82,15 @@ function submit(type: number) {
             >Đăng nhập</Link
         >
         để tham gia đấu giá.
+    </div>
+
+    <div
+        v-else-if="bannedUntil"
+        class="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm"
+        role="status"
+    >
+        Bạn bị tạm khoá đặt giá tới {{ formatDateTime(bannedUntil) }} vì đã từ
+        bỏ kết quả đấu giá nhiều lần.
     </div>
 
     <div

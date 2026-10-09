@@ -5,6 +5,7 @@ namespace App\Actions\Listings;
 use App\Enums\AuctionStatus;
 use App\Enums\AuctionType;
 use App\Enums\ModerationStatus;
+use App\Enums\SaleType;
 use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\Tag;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
 use App\Support\HtmlCleaner;
+use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -26,9 +28,9 @@ class CreateListing
     public function __construct(private readonly AuctionEngineClient $engine) {}
 
     /**
-     * Store the listing with its images and tags, then open its auction in the
-     * engine. If the engine refuses, nothing is kept: the transaction rolls back
-     * and the stored files are removed.
+     * Store the listing with its images and tags and, unless it is a fixed-price
+     * listing, open its auction in the engine. If the engine refuses, nothing is
+     * kept: the transaction rolls back and the stored files are removed.
      *
      * When moderators approve listings first, the auction is not opened here:
      * the listing waits as "pending" and ListingModeration opens it on approval.
@@ -41,16 +43,23 @@ class CreateListing
      */
     public function handle(User $seller, array $data, array $images, ?Listing $source = null): Listing
     {
-        $type = AuctionType::from((int) $data['auction_type']);
+        $saleType = SaleType::from($data['sale_type']);
+        // Null for a fixed-price listing: it has no auction, so none of the fields below apply.
+        $type = $saleType === SaleType::Auction ? AuctionType::from((int) $data['auction_type']) : null;
         $startTime = isset($data['start_time']) ? Carbon::parse($data['start_time']) : null;
         $endTime = $type === AuctionType::Up ? Carbon::parse($data['end_time']) : null;
         $needsApproval = self::approvalRequired() && ! $seller->isStaff();
+        // "Giá thoả thuận" stores no price; only fixed-price listings may use it.
+        $negotiable = $saleType === SaleType::Fixed && ($data['is_negotiable'] ?? false);
+        $price = $negotiable ? 0 : (int) $data['start_price'];
+        // An auction ends when the engine says so; a fixed-price listing after its lifetime.
+        $endsAt = $saleType === SaleType::Fixed ? self::fixedListingDeadline() : $endTime;
 
         $storedPaths = [];
         $auctionId = null;
 
         try {
-            return DB::transaction(function () use ($seller, $data, $images, $source, $type, $startTime, $endTime, $needsApproval, &$storedPaths, &$auctionId) {
+            return DB::transaction(function () use ($seller, $data, $images, $source, $saleType, $type, $startTime, $endTime, $needsApproval, $negotiable, $price, $endsAt, &$storedPaths, &$auctionId) {
                 $listing = Listing::query()->create([
                     'user_id' => $seller->id,
                     'category_id' => $data['category_id'],
@@ -60,8 +69,10 @@ class CreateListing
                     'condition' => $data['condition'],
                     'moderation_status' => $needsApproval ? ModerationStatus::Pending : ModerationStatus::Approved,
                     'relisted_from_id' => $source?->id,
+                    'sale_type' => $saleType,
                     'auction_type' => $type,
-                    'start_price' => $data['start_price'],
+                    'start_price' => $price,
+                    'is_negotiable' => $negotiable,
                     'min_bid_price' => $type === AuctionType::Up ? ($data['min_bid_price'] ?? null) : null,
                     'bid_step' => $type === AuctionType::Up ? ($data['bid_step'] ?? null) : null,
                     'start_time' => $startTime,
@@ -70,9 +81,11 @@ class CreateListing
                     'down_time' => $type === AuctionType::Down ? (int) $data['down_minutes'] * 60 : null,
                     'down_price' => $type === AuctionType::Down ? $data['down_price'] : null,
                     'finish_price' => $type === AuctionType::Down ? ($data['finish_price'] ?? null) : null,
-                    'auction_status' => AuctionStatus::Upcoming,
-                    'current_price' => $data['start_price'],
-                    'ends_at' => $endTime,
+                    // An auction starts as "upcoming" until the engine says otherwise;
+                    // a fixed-price listing is simply for sale.
+                    'auction_status' => $saleType === SaleType::Auction ? AuctionStatus::Upcoming : AuctionStatus::Running,
+                    'current_price' => $price,
+                    'ends_at' => $endsAt,
                 ]);
 
                 $position = 0;
@@ -93,7 +106,7 @@ class CreateListing
 
                 $listing->tags()->sync(self::tagIds($data['tags'] ?? []));
 
-                if (! $needsApproval) {
+                if ($saleType === SaleType::Auction && ! $needsApproval) {
                     $auctionId = $this->openAuction($listing);
                 }
 
@@ -126,6 +139,14 @@ class CreateListing
         return $listing->auction_id;
     }
 
+    /**
+     * When a fixed-price listing posted (or approved) now stops being shown.
+     */
+    public static function fixedListingDeadline(): CarbonInterface
+    {
+        return now()->addDays((int) config('marketplace.fixed_listing_days'));
+    }
+
     public static function approvalRequired(): bool
     {
         return (bool) Setting::read(Setting::LISTING_APPROVAL, false);
@@ -156,7 +177,7 @@ class CreateListing
         $payload = [
             'seller_id' => $listing->user_id,
             'item_id' => $listing->id,
-            'auction_type' => $listing->auction_type->value,
+            'auction_type' => $listing->auction_type?->value,
             'start_price' => $listing->start_price,
             // Omitted start_time means "start now".
             'start_time' => $listing->start_time?->format(self::ENGINE_DATE_FORMAT),

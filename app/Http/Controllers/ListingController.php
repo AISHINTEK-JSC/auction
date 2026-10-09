@@ -8,6 +8,7 @@ use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
 use App\Enums\ModerationStatus;
 use App\Enums\ReportReason;
+use App\Enums\SaleType;
 use App\Http\Requests\Listings\StoreListingRequest;
 use App\Http\Requests\Listings\UpdateListingRequest;
 use App\Models\Category;
@@ -42,6 +43,8 @@ class ListingController extends Controller
         'down_time' => 'down_minutes',
     ];
 
+    private const TYPE_FIXED = 3;
+
     public function index(Request $request): Response
     {
         return $this->browse($request);
@@ -65,15 +68,18 @@ class ListingController extends Controller
 
         $listing->load(['images', 'city', 'category', 'tags', 'user', 'winner']);
 
+        $this->countView($request, $listing);
+
         // "auction" and "bids" are the two props the page polls; everything else is
         // wrapped in closures so a poll does not recompute it.
         return Inertia::render('listings/Show', [
-            'auction' => fn () => $sync->liveState($listing),
-            'bids' => fn () => BidPresenter::present(
+            // A fixed-price listing has no auction: nothing to ask the engine.
+            'auction' => fn () => $listing->isAuction() ? $sync->liveState($listing) : null,
+            'bids' => fn () => $listing->isAuction() ? BidPresenter::present(
                 array_slice($sync->liveBids($listing), 0, 5),
                 $viewer,
                 $listing->auction_status === AuctionStatus::Running,
-            ),
+            ) : [],
             // liveState() may just have recorded the winner on this same instance.
             'listing' => fn () => ListingPresenter::detail($listing->unsetRelation('winner'), $viewer),
             'comments' => fn () => $this->comments($listing, $viewer),
@@ -93,7 +99,7 @@ class ListingController extends Controller
 
     public function create(): Response
     {
-        return Inertia::render('listings/Create', $this->formOptions() + ['source' => null]);
+        return Inertia::render('listings/Create', $this->createOptions() + ['source' => null]);
     }
 
     /**
@@ -106,10 +112,12 @@ class ListingController extends Controller
 
         $listing->load(['images', 'tags']);
 
-        return Inertia::render('listings/Create', $this->formOptions() + [
+        return Inertia::render('listings/Create', $this->createOptions() + [
             'source' => [
                 ...$this->editable($listing),
-                'auction_type' => $listing->auction_type->value,
+                'sale_type' => $listing->sale_type->value,
+                'is_negotiable' => $listing->is_negotiable,
+                'auction_type' => $listing->auction_type?->value,
                 'start_price' => $listing->start_price,
                 'min_bid_price' => $listing->min_bid_price,
                 'bid_step' => $listing->bid_step,
@@ -134,16 +142,18 @@ class ListingController extends Controller
             throw ValidationException::withMessages($this->engineErrors($e));
         }
 
-        if ($listing->auction_id === null) {
+        if (! $listing->isPublished()) {
             Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã gửi tin. Tin sẽ hiển thị sau khi được duyệt.']);
 
             return to_route('dashboard');
         }
 
-        // Best effort: the scheduler syncs it within a minute anyway.
-        rescue(fn () => $sync->refresh($listing), report: false);
+        if ($listing->isAuction()) {
+            // Best effort: the scheduler syncs it within a minute anyway.
+            rescue(fn () => $sync->refresh($listing), report: false);
+        }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã đăng tin đấu giá.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => $listing->isAuction() ? 'Đã đăng tin đấu giá.' : 'Đã đăng tin.']);
 
         return to_route('listings.show', $listing);
     }
@@ -155,7 +165,7 @@ class ListingController extends Controller
         $listing->load(['images', 'tags']);
 
         return Inertia::render('listings/Edit', $this->formOptions() + [
-            'listing' => $this->editable($listing) + ['has_auction' => $listing->auction_id !== null],
+            'listing' => $this->editable($listing) + ['has_auction' => $listing->isLive()],
         ]);
     }
 
@@ -199,17 +209,40 @@ class ListingController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã lưu tin đăng.']);
 
-        return $listing->auction_id !== null && Gate::allows('view', $listing)
+        return Gate::allows('view', $listing)
             ? to_route('listings.show', $listing)
             : to_route('dashboard');
     }
 
     /**
-     * The seller cancels the auction. The listing itself is kept as history.
+     * The seller of a fixed-price listing marks the item as sold.
+     */
+    public function sold(Listing $listing): RedirectResponse
+    {
+        Gate::authorize('markSold', $listing);
+
+        $listing->forceFill(['auction_status' => AuctionStatus::Completed, 'ends_at' => now()])->save();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã đánh dấu là đã bán.']);
+
+        return back();
+    }
+
+    /**
+     * The seller cancels the auction, or takes a fixed-price listing down. The
+     * listing itself is kept as history.
      */
     public function destroy(Listing $listing, AuctionEngineClient $engine, ListingSyncService $sync): RedirectResponse
     {
         Gate::authorize('cancel', $listing);
+
+        if ($listing->isFixedPrice()) {
+            $listing->forceFill(['auction_status' => AuctionStatus::CancelledBySeller, 'ends_at' => now()])->save();
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã gỡ tin.']);
+
+            return back();
+        }
 
         try {
             $engine->cancelAuction((int) $listing->auction_id);
@@ -225,14 +258,37 @@ class ListingController extends Controller
         return back();
     }
 
+    /**
+     * Count a visit once per browser session: not the seller's own, and not
+     * the partial reloads the page makes while polling.
+     */
+    private function countView(Request $request, Listing $listing): void
+    {
+        if ($request->hasHeader('X-Inertia-Partial-Data') || $request->user()?->id === $listing->user_id) {
+            return;
+        }
+
+        $seen = (array) $request->session()->get('viewed_listings', []);
+
+        if (in_array($listing->id, $seen, true)) {
+            return;
+        }
+
+        // Without touching updated_at: a view is not an edit.
+        Listing::withoutTimestamps(fn () => $listing->increment('view_count'));
+
+        $request->session()->put('viewed_listings', array_slice([...$seen, $listing->id], -200));
+    }
+
     private function browse(Request $request, ?Category $category = null, ?Tag $tag = null): Response
     {
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'city_id' => ['nullable', 'integer'],
-            'type' => ['nullable', 'integer', 'in:1,2'],
+            // 1 and 2 are the auction types; 3 stands for fixed-price listings.
+            'type' => ['nullable', 'integer', 'in:1,2,3'],
             'status' => ['nullable', 'in:open,running,upcoming,ended'],
-            'sort' => ['nullable', 'in:ending,newest,price_asc,price_desc'],
+            'sort' => ['nullable', 'in:ending,newest,popular,price_asc,price_desc'],
         ]);
 
         $status = $filters['status'] ?? 'open';
@@ -245,7 +301,9 @@ class ListingController extends Controller
             ->when($tag, fn (Builder $q) => $q->whereRelation('tags', 'tags.id', $tag->id))
             ->when($filters['q'] ?? null, fn (Builder $q, string $term) => $q->whereLike('title', '%'.addcslashes($term, '%_\\').'%'))
             ->when($filters['city_id'] ?? null, fn (Builder $q, int|string $cityId) => $q->where('city_id', $cityId))
-            ->when($filters['type'] ?? null, fn (Builder $q, int|string $type) => $q->where('auction_type', AuctionType::from((int) $type)));
+            ->when($filters['type'] ?? null, fn (Builder $q, int|string $type) => (int) $type === self::TYPE_FIXED
+                ? $q->where('sale_type', SaleType::Fixed)
+                : $q->where('auction_type', AuctionType::from((int) $type)));
 
         match ($status) {
             'running' => $query->status(AuctionStatus::Running),
@@ -256,8 +314,10 @@ class ListingController extends Controller
 
         match ($sort) {
             'newest' => $query->latest('id'),
-            'price_asc' => $query->orderBy('current_price'),
-            'price_desc' => $query->orderByDesc('current_price'),
+            'popular' => $query->orderByDesc('view_count')->orderByDesc('bid_count')->latest('id'),
+            // Listings without a stated price go last either way.
+            'price_asc' => $query->orderBy('is_negotiable')->orderBy('current_price'),
+            'price_desc' => $query->orderBy('is_negotiable')->orderByDesc('current_price'),
             default => $query->orderByRaw('ends_at is null')->orderBy('ends_at'),
         };
 
@@ -276,6 +336,16 @@ class ListingController extends Controller
                 'sort' => $sort,
             ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function createOptions(): array
+    {
+        return $this->formOptions() + [
+            'fixedListingDays' => (int) config('marketplace.fixed_listing_days'),
+        ];
     }
 
     /**

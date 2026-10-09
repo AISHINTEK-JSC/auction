@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Categories;
 use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Categories\Pages\ManageCategories;
 use App\Models\Category;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -67,8 +68,8 @@ class CategoryResource extends Resource
                 TextColumn::make('position')->label('Thứ tự')->sortable(),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()->after(fn (Category $record) => AdminLog::record('category.updated', $record, 'Sửa danh mục "'.$record->name.'"')),
+                DeleteAction::make()->before(fn (Category $record) => AdminLog::record('category.deleted', $record, 'Xoá danh mục "'.$record->name.'"')),
             ]);
     }
 

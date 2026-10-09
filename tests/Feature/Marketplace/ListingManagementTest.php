@@ -120,6 +120,7 @@ class ListingManagementTest extends TestCase
             'category_id' => $old->category_id,
             'city_id' => $old->city_id,
             'condition' => 'used',
+            'sale_type' => 'auction',
             'auction_type' => 1,
             'start_price' => 90000,
             'end_time' => now()->addDay()->format('Y-m-d\TH:i'),
@@ -151,6 +152,7 @@ class ListingManagementTest extends TestCase
             'category_id' => $running->category_id,
             'city_id' => $running->city_id,
             'condition' => 'used',
+            'sale_type' => 'auction',
             'auction_type' => 1,
             'start_price' => 90000,
             'end_time' => now()->addDay()->format('Y-m-d\TH:i'),
@@ -179,6 +181,45 @@ class ListingManagementTest extends TestCase
             ->where('member.name', 'Chị Bán')
             ->where('member.listing_count', 2)
             ->has('listings.data', 2));
+    }
+
+    public function test_views_are_counted_once_per_visitor_and_never_for_the_seller(): void
+    {
+        $listing = Listing::factory()->fixedPrice()->create();
+        $before = $listing->updated_at;
+
+        $this->travel(5)->minutes();
+
+        $this->get(route('listings.show', $listing));
+        $this->get(route('listings.show', $listing));
+        $this->assertSame(1, $listing->refresh()->view_count);
+        // A view is not an edit.
+        $this->assertTrue($before->equalTo($listing->updated_at));
+
+        $this->actingAs($listing->user)->get(route('listings.show', $listing));
+        $this->assertSame(1, $listing->refresh()->view_count);
+
+        // A new visitor counts again; the polling reloads of the page do not.
+        $this->flushSession();
+        $visitor = User::factory()->create();
+        $this->actingAs($visitor)->get(route('listings.show', $listing))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('listing.view_count', 2)
+                ->reloadOnly(['auction', 'bids']));
+        $this->assertSame(2, $listing->refresh()->view_count);
+    }
+
+    public function test_listings_can_be_sorted_by_popularity(): void
+    {
+        Listing::factory()->fixedPrice()->create(['title' => 'Ít xem', 'view_count' => 3]);
+        Listing::factory()->fixedPrice()->create(['title' => 'Nhiều xem', 'view_count' => 50]);
+        Listing::factory()->fixedPrice()->create(['title' => 'Vừa', 'view_count' => 10]);
+
+        $this->get(route('listings.index', ['sort' => 'popular']))->assertInertia(fn (Assert $page) => $page
+            ->where('filters.sort', 'popular')
+            ->where('listings.data.0.title', 'Nhiều xem')
+            ->where('listings.data.1.title', 'Vừa')
+            ->where('listings.data.2.title', 'Ít xem'));
     }
 
     public function test_unknown_pages_get_the_marketplace_error_page(): void

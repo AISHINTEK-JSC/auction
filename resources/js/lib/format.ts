@@ -14,6 +14,17 @@ export function formatVnd(amount: number | null | undefined): string {
         : `${vnd.format(amount)} đ`;
 }
 
+/** The price line of a listing: "Thoả thuận" when the seller did not state one. */
+export function formatPrice(listing: {
+    negotiable: boolean;
+    current_price: number;
+    winning_price?: number | null;
+}): string {
+    return listing.negotiable
+        ? 'Thoả thuận'
+        : formatVnd(listing.winning_price ?? listing.current_price);
+}
+
 export function formatDateTime(value: string | null | undefined): string {
     if (!value) {
         return '—';

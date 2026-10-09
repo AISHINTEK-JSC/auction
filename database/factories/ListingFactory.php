@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\AuctionStatus;
 use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
+use App\Enums\SaleType;
 use App\Models\Listing;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -40,6 +41,21 @@ class ListingFactory extends Factory
     public function status(AuctionStatus $status): static
     {
         return $this->state(fn () => ['auction_status' => $status]);
+    }
+
+    /**
+     * A plain post with a price: no auction anywhere.
+     */
+    public function fixedPrice(): static
+    {
+        return $this->state(fn () => [
+            'sale_type' => SaleType::Fixed,
+            'auction_id' => null,
+            'auction_type' => null,
+            'end_time' => null,
+            'ends_at' => null,
+            'auction_status' => AuctionStatus::Running,
+        ]);
     }
 
     public function descending(): static

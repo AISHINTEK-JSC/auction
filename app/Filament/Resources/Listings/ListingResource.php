@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Listings;
 
 use App\Enums\AuctionStatus;
-use App\Enums\AuctionType;
 use App\Enums\ModerationStatus;
 use App\Filament\Resources\Listings\Pages\ManageListings;
 use App\Models\Listing;
@@ -11,9 +10,11 @@ use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
 use App\Services\ListingModeration;
 use App\Services\ListingSyncService;
+use App\Support\AdminLog;
 use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -66,10 +67,11 @@ class ListingResource extends Resource
                     })
                     ->description(fn (Listing $record) => $record->moderation_note),
                 TextColumn::make('reports_count')->label('Báo cáo')->counts('reports')->sortable(),
-                TextColumn::make('auction_id')->label('Auction ID')->placeholder('—'),
-                TextColumn::make('auction_type')->label('Loại')->formatStateUsing(fn (AuctionType $state) => $state->label()),
+                TextColumn::make('auction_id')->label('Auction ID')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('sale_type')->label('Loại')
+                    ->formatStateUsing(fn (Listing $record) => $record->auction_type?->label() ?? $record->sale_type->label()),
                 TextColumn::make('auction_status')->label('Trạng thái')->badge()
-                    ->formatStateUsing(fn (AuctionStatus $state) => $state->label())
+                    ->formatStateUsing(fn (Listing $record) => $record->statusLabel())
                     ->color(fn (AuctionStatus $state) => match ($state) {
                         AuctionStatus::Running => 'success',
                         AuctionStatus::Upcoming => 'info',
@@ -79,7 +81,7 @@ class ListingResource extends Resource
                 TextColumn::make('current_price')->label('Giá hiện tại')->numeric(thousandsSeparator: '.')->sortable(),
                 TextColumn::make('bid_count')->label('Lượt đặt')->sortable(),
                 TextColumn::make('ends_at')->label('Kết thúc')->dateTime('d/m/Y H:i')->sortable()->placeholder('—'),
-                TextColumn::make('synced_at')->label('Đồng bộ lúc')->since()->placeholder('—'),
+                TextColumn::make('synced_at')->label('Đồng bộ lúc')->since()->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('moderation_status')->label('Kiểm duyệt')
@@ -91,44 +93,49 @@ class ListingResource extends Resource
                 Action::make('approve')->label('Duyệt')->icon(Heroicon::OutlinedCheckCircle)->color('success')
                     ->visible(fn (Listing $record) => $record->moderation_status !== ModerationStatus::Approved)
                     ->requiresConfirmation()
-                    ->modalDescription(fn (Listing $record) => $record->auction_id === null
+                    ->modalDescription(fn (Listing $record) => $record->isAuction() && $record->auction_id === null
                         ? 'Duyệt sẽ mở phiên đấu giá của tin này trong hệ thống đấu giá.'
                         : 'Tin sẽ hiển thị lại trên sàn.')
                     ->action(fn (Listing $record) => self::callEngine(
                         fn () => app(ListingModeration::class)->approve($record),
                         'Đã duyệt tin',
                     )),
-                Action::make('reject')->label('Từ chối')->icon(Heroicon::OutlinedXMark)->color('danger')
-                    ->visible(fn (Listing $record) => $record->moderation_status === ModerationStatus::Pending)
-                    ->schema([Textarea::make('note')->label('Lý do (gửi cho người bán)')->required()->maxLength(255)])
-                    ->action(function (Listing $record, array $data): void {
-                        app(ListingModeration::class)->reject($record, $data['note']);
+                // Less frequent actions live in the row menu so the table fits without sideways scrolling.
+                ActionGroup::make([
+                    Action::make('reject')->label('Từ chối')->icon(Heroicon::OutlinedXMark)->color('danger')
+                        ->visible(fn (Listing $record) => $record->moderation_status === ModerationStatus::Pending)
+                        ->schema([Textarea::make('note')->label('Lý do (gửi cho người bán)')->required()->maxLength(255)])
+                        ->action(function (Listing $record, array $data): void {
+                            app(ListingModeration::class)->reject($record, $data['note']);
 
-                        Notification::make()->title('Đã từ chối tin')->success()->send();
-                    }),
-                Action::make('hide')->label('Ẩn tin')->icon(Heroicon::OutlinedEyeSlash)->color('danger')
-                    ->visible(fn (Listing $record) => $record->moderation_status === ModerationStatus::Approved)
-                    ->schema([Textarea::make('note')->label('Lý do (gửi cho người bán)')->required()->maxLength(255)])
-                    ->modalDescription('Tin sẽ không còn hiển thị. Phiên đấu giá vẫn chạy trong hệ thống đấu giá; dùng "Huỷ phiên" nếu cần dừng.')
-                    ->action(function (Listing $record, array $data): void {
-                        app(ListingModeration::class)->hide($record, $data['note']);
-                        $record->reports()->whereNull('handled_at')->update(['handled_at' => now(), 'handled_by' => auth()->id()]);
+                            Notification::make()->title('Đã từ chối tin')->success()->send();
+                        }),
+                    Action::make('hide')->label('Ẩn tin')->icon(Heroicon::OutlinedEyeSlash)->color('danger')
+                        ->visible(fn (Listing $record) => $record->moderation_status === ModerationStatus::Approved)
+                        ->schema([Textarea::make('note')->label('Lý do (gửi cho người bán)')->required()->maxLength(255)])
+                        ->modalDescription('Tin sẽ không còn hiển thị. Phiên đấu giá vẫn chạy trong hệ thống đấu giá; dùng "Huỷ phiên" nếu cần dừng.')
+                        ->action(function (Listing $record, array $data): void {
+                            app(ListingModeration::class)->hide($record, $data['note']);
+                            $record->reports()->whereNull('handled_at')->update(['handled_at' => now(), 'handled_by' => auth()->id()]);
 
-                        Notification::make()->title('Đã ẩn tin')->success()->send();
-                    }),
-                Action::make('sync')->label('Đồng bộ')->icon(Heroicon::OutlinedArrowPath)->color('gray')
-                    ->visible(fn (Listing $record) => $record->auction_id !== null)
-                    ->action(fn (Listing $record) => self::callEngine(
-                        fn () => app(ListingSyncService::class)->refresh($record),
-                        'Đã đồng bộ với hệ thống đấu giá',
-                    )),
-                Action::make('cancel')->label('Huỷ phiên')->icon(Heroicon::OutlinedXCircle)->color('danger')
-                    ->visible(fn (Listing $record) => $record->auction_id !== null && $record->auction_status->isOpen())
-                    ->requiresConfirmation()
-                    ->action(fn (Listing $record) => self::callEngine(function () use ($record): void {
-                        app(AuctionEngineClient::class)->cancelAuction((int) $record->auction_id);
-                        app(ListingSyncService::class)->refresh($record);
-                    }, 'Đã huỷ phiên đấu giá')),
+                            Notification::make()->title('Đã ẩn tin')->success()->send();
+                        }),
+                    Action::make('sync')->label('Đồng bộ')->icon(Heroicon::OutlinedArrowPath)->color('gray')
+                        ->visible(fn (Listing $record) => $record->auction_id !== null)
+                        ->action(fn (Listing $record) => self::callEngine(
+                            fn () => app(ListingSyncService::class)->refresh($record),
+                            'Đã đồng bộ với hệ thống đấu giá',
+                        )),
+                    Action::make('cancel')->label('Huỷ phiên')->icon(Heroicon::OutlinedXCircle)->color('danger')
+                        ->visible(fn (Listing $record) => $record->auction_id !== null && $record->auction_status->isOpen())
+                        ->requiresConfirmation()
+                        ->action(fn (Listing $record) => self::callEngine(function () use ($record): void {
+                            app(AuctionEngineClient::class)->cancelAuction((int) $record->auction_id);
+                            app(ListingSyncService::class)->refresh($record);
+
+                            AdminLog::record('listing.auction_cancelled', $record, sprintf('Huỷ phiên đấu giá của tin #%d "%s"', $record->id, $record->title));
+                        }, 'Đã huỷ phiên đấu giá')),
+                ]),
             ]);
     }
 

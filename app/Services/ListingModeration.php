@@ -8,6 +8,7 @@ use App\Enums\ModerationStatus;
 use App\Models\Listing;
 use App\Notifications\MarketplaceNotification;
 use App\Services\AuctionEngine\EngineException;
+use App\Support\AdminLog;
 use DomainException;
 
 /**
@@ -28,7 +29,7 @@ class ListingModeration
      */
     public function approve(Listing $listing): void
     {
-        if ($listing->auction_id === null) {
+        if ($listing->isAuction() && $listing->auction_id === null) {
             // The seller's start time may have passed while the listing waited: start now instead.
             if ($listing->start_time?->isPast()) {
                 $listing->start_time = null;
@@ -42,9 +43,16 @@ class ListingModeration
             $this->creator->openAuction($listing);
         }
 
+        // A fixed-price listing's lifetime starts when it becomes visible.
+        if ($listing->isFixedPrice() && $listing->moderation_status === ModerationStatus::Pending) {
+            $listing->ends_at = CreateListing::fixedListingDeadline();
+        }
+
         $this->decide($listing, ModerationStatus::Approved, null);
 
-        rescue(fn () => $this->sync->refresh($listing), report: false);
+        if ($listing->isAuction()) {
+            rescue(fn () => $this->sync->refresh($listing), report: false);
+        }
     }
 
     public function reject(Listing $listing, ?string $note): void
@@ -66,6 +74,17 @@ class ListingModeration
         $listing->moderation_status = $status;
         $listing->moderation_note = $note;
         $listing->save();
+
+        // Only staff moderate; outside a signed-in request (tests, console) there is nobody to name.
+        if (auth()->check()) {
+            AdminLog::record('listing.'.$status->value, $listing, sprintf(
+                '%s tin #%d "%s"%s',
+                $status->label(),
+                $listing->id,
+                $listing->title,
+                $note ? ' — lý do: '.$note : '',
+            ));
+        }
 
         $this->notifier->send($listing->user, MarketplaceNotification::moderated($listing));
     }

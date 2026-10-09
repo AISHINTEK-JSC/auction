@@ -5,6 +5,7 @@ namespace App\Filament\Resources\BlockedEmailDomains;
 use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\BlockedEmailDomains\Pages\ManageBlockedEmailDomains;
 use App\Models\BlockedEmailDomain;
+use App\Support\AdminLog;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -53,8 +54,8 @@ class BlockedEmailDomainResource extends Resource
                 TextColumn::make('created_at')->label('Thêm lúc')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                EditAction::make()->after(fn (BlockedEmailDomain $record) => AdminLog::record('blocked_domain.updated', $record, 'Sửa tên miền email bị chặn "'.$record->domain.'"')),
+                DeleteAction::make()->before(fn (BlockedEmailDomain $record) => AdminLog::record('blocked_domain.deleted', $record, 'Xoá tên miền email bị chặn "'.$record->domain.'"')),
             ]);
     }
 

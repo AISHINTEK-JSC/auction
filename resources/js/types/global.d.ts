@@ -1,6 +1,10 @@
 import type { Directive } from 'vue';
 import type { Auth } from '@/types/auth';
-import type { CategoryNode, CityOption } from '@/types/marketplace';
+import type {
+    CategoryNode,
+    CityOption,
+    NotificationItem,
+} from '@/types/marketplace';
 
 // Extend ImportMeta interface for Vite...
 declare module 'vite/client' {
@@ -23,6 +27,8 @@ declare module '@inertiajs/core' {
             categories: CategoryNode[];
             cities: CityOption[];
             unreadNotifications: number;
+            /** Latest notifications, loaded on demand by the bell's dropdown. */
+            recentNotifications?: NotificationItem[];
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

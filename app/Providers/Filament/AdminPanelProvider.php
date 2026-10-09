@@ -10,6 +10,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -28,6 +29,9 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->brandName(config('app.name').' · Quản trị')
+            // Tables here have many columns and row actions: use the whole width
+            // instead of Filament's default 7xl container.
+            ->maxContentWidth(Width::Full)
             ->colors([
                 'primary' => Color::Amber,
             ])

@@ -12,6 +12,7 @@ use App\Notifications\MarketplaceNotification;
 use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
 use App\Services\AuctionNotifier;
+use App\Services\ForfeitPenalty;
 use App\Services\ListingSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,6 +67,8 @@ class ListingInteractionController extends Controller
         AuctionEngineClient $engine,
         ListingSyncService $sync,
         AuctionNotifier $notifier,
+        ForfeitPenalty $penalty,
+        Request $request,
     ): RedirectResponse {
         Gate::authorize('settle', $listing);
 
@@ -89,6 +92,10 @@ class ListingInteractionController extends Controller
         $successor = $listing->auction_status === AuctionStatus::Completed && $listing->winner_id !== null
             ? User::query()->find($listing->winner_id)
             : null;
+
+        if ($previousWinner !== null) {
+            $penalty->apply($previousWinner, $listing, $request->user());
+        }
 
         $notifier->send($listing->user, MarketplaceNotification::winnerWithdrew($listing, $successor !== null));
         $notifier->send($successor, MarketplaceNotification::won($listing));

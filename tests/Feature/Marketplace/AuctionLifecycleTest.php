@@ -7,6 +7,7 @@ use App\Models\Listing;
 use App\Models\Review;
 use App\Models\User;
 use App\Notifications\MarketplaceNotification;
+use App\Services\ForfeitPenalty;
 use App\Services\ListingSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -134,6 +135,31 @@ class AuctionLifecycleTest extends TestCase
         $this->assertSame(0, $user->unreadNotifications()->count());
     }
 
+    public function test_the_bell_dropdown_loads_the_latest_notifications_only_when_asked(): void
+    {
+        $user = User::factory()->create();
+        $listing = Listing::factory()->create(['title' => 'Đồng hồ']);
+
+        foreach (range(1, 10) as $i) {
+            $user->notify(MarketplaceNotification::outbid($listing));
+        }
+        $newest = $user->notifications()->first();
+
+        $this->actingAs($user)->get(route('home'))->assertInertia(fn (Assert $page) => $page
+            ->where('unreadNotifications', 10)
+            // Not part of an ordinary page load...
+            ->missing('recentNotifications')
+            // ...only of the partial reload the dropdown makes when it opens.
+            ->reloadOnly(['recentNotifications', 'unreadNotifications'], fn (Assert $reload) => $reload
+                ->has('recentNotifications', 8)
+                ->where('recentNotifications.0.id', $newest->id)
+                ->where('recentNotifications.0.read', false)
+                ->where('recentNotifications.0.title', 'Bạn đã bị vượt giá')
+                ->where('unreadNotifications', 10)));
+
+        $this->get(route('home'))->assertOk();
+    }
+
     public function test_only_seller_and_winner_see_each_others_contact_details(): void
     {
         $seller = User::factory()->create(['phone' => '0911111111']);
@@ -212,8 +238,81 @@ class AuctionLifecycleTest extends TestCase
         $this->assertSame(['won'], $this->kinds($successor));
         $this->assertDatabaseCount('reviews', 0);
 
+        // Backing out is on record, with a warning the first time.
+        $this->assertSame(1, $winner->forfeits()->count());
+        $this->assertSame($winner->id, $winner->forfeits()->sole()->declared_by);
+        $this->assertSame(['forfeit_warning'], $this->kinds($winner));
+
         // The former winner is no longer a party to this auction.
         $this->actingAs($winner)->post(route('listings.withdraw-winner', $listing))->assertForbidden();
+    }
+
+    public function test_giving_up_results_repeatedly_earns_a_growing_ban_from_bidding(): void
+    {
+        config(['marketplace.forfeit_bans' => [2 => 7, 3 => 30], 'marketplace.forfeit_window_days' => 90]);
+
+        $winner = User::factory()->create();
+        $penalty = app(ForfeitPenalty::class);
+        $listing = fn () => Listing::factory()->status(AuctionStatus::Completed)->create();
+
+        // First time: a warning that says what comes next.
+        $this->assertNull($penalty->apply($winner, $listing(), $winner));
+        $this->assertFalse($winner->refresh()->isBidBanned());
+        $warning = $winner->notifications()->sole();
+        $this->assertSame('forfeit_warning', $warning->data['kind']);
+        $this->assertStringContainsString('7 ngày', $warning->data['body']);
+
+        // Second: 7 days. Third: 30 days.
+        $until = $penalty->apply($winner, $listing(), $winner);
+        $this->assertEqualsWithDelta(7 * 86400, now()->diffInSeconds($until), 60);
+        $this->assertTrue($winner->refresh()->isBidBanned());
+
+        $until = $penalty->apply($winner, $listing(), null);
+        $this->assertEqualsWithDelta(30 * 86400, now()->diffInSeconds($until), 60);
+        $this->assertSame(3, $winner->forfeits()->count());
+        $this->assertSame(['bid_ban', 'bid_ban', 'forfeit_warning'], $winner->notifications()->latest()->get()->map(fn ($n) => $n->data['kind'])->sort()->values()->all());
+    }
+
+    public function test_old_forfeits_stop_counting_and_a_ban_is_never_shortened(): void
+    {
+        config(['marketplace.forfeit_bans' => [2 => 7, 3 => 30], 'marketplace.forfeit_window_days' => 90]);
+
+        $winner = User::factory()->create();
+        $penalty = app(ForfeitPenalty::class);
+        $listing = fn () => Listing::factory()->status(AuctionStatus::Completed)->create();
+
+        $penalty->apply($winner, $listing(), $winner);
+        $this->travel(100)->days();
+
+        // The earlier one is outside the window: this is a "first time" again.
+        $this->assertNull($penalty->apply($winner, $listing(), $winner));
+        $this->assertSame(1, $penalty->recentCount($winner));
+
+        // An admin-set or longer ban is kept when a shorter one would apply.
+        $winner->forceFill(['bid_banned_until' => now()->addYear()])->save();
+        $until = $penalty->apply($winner, $listing(), $winner);
+        $this->assertTrue($until->greaterThan(now()->addMonths(11)));
+    }
+
+    public function test_a_banned_member_cannot_bid_and_the_ban_ends_by_itself(): void
+    {
+        $listing = Listing::factory()->create(['auction_id' => 7]);
+        $member = User::factory()->create();
+        $member->forceFill(['bid_banned_until' => now()->addDays(3)])->save();
+
+        Http::fake([
+            'engine.test/api/v1/bid' => Http::response($this->engineOk(['auction_id' => 7])),
+            'engine.test/api/v1/auction/7' => Http::response($this->engineOk($this->engineAuction(7))),
+        ]);
+
+        $this->actingAs($member)->post(route('listings.bids.store', $listing), ['bid_type' => 2])
+            ->assertSessionHasErrors('bid_price');
+        Http::assertNothingSent();
+
+        $this->travel(4)->days();
+
+        $this->actingAs($member->refresh())->post(route('listings.bids.store', $listing), ['bid_type' => 2])
+            ->assertSessionHasNoErrors();
     }
 
     public function test_with_no_successor_the_auction_is_cancelled(): void

@@ -36,11 +36,16 @@ export type ListingCard = {
     title: string;
     image: string | null;
     city: string | null;
-    auction_type: number;
+    /** 'fixed' is a plain post with a price: no auction, no bids, no countdown. */
+    sale_type: 'auction' | 'fixed';
+    auction_type: number | null;
     status: number;
     status_label: string;
     current_price: number;
+    /** "Giá thoả thuận": a fixed-price listing without a stated price. */
+    negotiable: boolean;
     bid_count: number;
+    view_count: number;
     starts_at: string | null;
     ends_at: string | null;
     winner: string | null;
@@ -56,7 +61,12 @@ export type ListingCard = {
 /** A card on "my auctions", with what the member may do to it. */
 export type DashboardCard = ListingCard & {
     leading: boolean;
-    can: { edit: boolean; cancel: boolean; relist: boolean };
+    can: {
+        edit: boolean;
+        cancel: boolean;
+        relist: boolean;
+        mark_sold: boolean;
+    };
 };
 
 export type Seller = {
@@ -110,7 +120,12 @@ export type ListingDetail = ListingCard & {
     seller: Seller;
     watching: boolean;
     watcher_count: number;
-    can: { edit: boolean; settle: boolean };
+    can: {
+        edit: boolean;
+        settle: boolean;
+        cancel: boolean;
+        mark_sold: boolean;
+    };
     /** The other side's contact details; only for the seller and the winner of a finished auction. */
     contact: Contact | null;
     my_review: ReviewItem | null;

@@ -2,13 +2,16 @@
 import { Head, Link, router, usePoll } from '@inertiajs/vue3';
 import {
     BadgeCheck,
+    Eye,
     Gavel,
     MapPin,
+    Tag,
     TrendingDown,
     TrendingUp,
 } from '@lucide/vue';
 import { computed, watch } from 'vue';
 import BidPanel from '@/components/marketplace/BidPanel.vue';
+import FixedPricePanel from '@/components/marketplace/FixedPricePanel.vue';
 import CommentThread from '@/components/marketplace/CommentThread.vue';
 import Countdown from '@/components/marketplace/Countdown.vue';
 import ImageGallery from '@/components/marketplace/ImageGallery.vue';
@@ -38,7 +41,8 @@ import type {
 
 const props = defineProps<{
     listing: ListingDetail;
-    auction: AuctionState;
+    /** Live engine state; null for a fixed-price listing, which has no auction. */
+    auction: AuctionState | null;
     bids: Bid[];
     comments: CommentItem[];
     reportReasons: { value: string; label: string }[];
@@ -47,10 +51,27 @@ const props = defineProps<{
 }>();
 
 const isDown = computed(() => props.listing.auction_type === AuctionType.Down);
+const isFixed = computed(() => props.listing.sale_type === 'fixed');
+
+// One shape for the template either way: the engine's live state for an
+// auction, the listing's own stored state for a fixed-price listing.
+const state = computed<AuctionState>(
+    () =>
+        props.auction ?? {
+            status: props.listing.status,
+            status_label: props.listing.status_label,
+            current_price: props.listing.current_price,
+            bid_count: 0,
+            remaining_time: null,
+            highest_bidder_id: null,
+            stale: false,
+        },
+);
+
 const isOpen = computed(
     () =>
-        props.auction.status === AuctionStatus.Upcoming ||
-        props.auction.status === AuctionStatus.Running,
+        state.value.status === AuctionStatus.Upcoming ||
+        state.value.status === AuctionStatus.Running,
 );
 
 // The engine has no websocket: poll its state while the auction can still change.
@@ -60,11 +81,12 @@ const { stop } = usePoll(5000, { only: ['auction', 'bids'] });
 watch(
     isOpen,
     (open, wasOpen) => {
-        if (!open) {
+        // Nothing to poll for a fixed-price listing.
+        if (!open || isFixed.value) {
             stop();
         }
 
-        if (wasOpen && !open) {
+        if (wasOpen && !open && !isFixed.value) {
             router.reload();
         }
     },
@@ -137,7 +159,7 @@ function cancelBid(bid: Bid) {
                             <MapPin class="size-3.5" />{{ listing.city }}
                         </dd>
                     </div>
-                    <div>
+                    <div v-if="!isFixed">
                         <dt class="text-muted-foreground">Giá khởi điểm</dt>
                         <dd>{{ formatVnd(listing.start_price) }}</dd>
                     </div>
@@ -172,6 +194,16 @@ function cancelBid(bid: Bid) {
                     <div>
                         <dt class="text-muted-foreground">Đăng lúc</dt>
                         <dd>{{ formatDateTime(listing.created_at) }}</dd>
+                    </div>
+                    <div v-if="isFixed && isOpen && listing.ends_at">
+                        <dt class="text-muted-foreground">Hiển thị đến</dt>
+                        <dd>{{ formatDateTime(listing.ends_at) }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-muted-foreground">Lượt xem</dt>
+                        <dd class="flex items-center gap-1">
+                            <Eye class="size-3.5" />{{ listing.view_count }}
+                        </dd>
                     </div>
                 </dl>
 
@@ -210,12 +242,16 @@ function cancelBid(bid: Bid) {
                 class="order-2 space-y-4 rounded-lg border bg-background p-4 lg:order-none"
             >
                 <div class="flex flex-wrap items-center gap-2">
-                    <Badge :variant="isDown ? 'destructive' : 'default'">
+                    <Badge v-if="isFixed" variant="secondary">
+                        <Tag />
+                        {{ listing.auction_type_label }}
+                    </Badge>
+                    <Badge v-else :variant="isDown ? 'destructive' : 'default'">
                         <TrendingDown v-if="isDown" />
                         <TrendingUp v-else />
                         {{ listing.auction_type_label }}
                     </Badge>
-                    <Badge variant="outline">{{ auction.status_label }}</Badge>
+                    <Badge variant="outline">{{ state.status_label }}</Badge>
                 </div>
 
                 <h1 class="text-xl leading-7 font-semibold">
@@ -230,22 +266,27 @@ function cancelBid(bid: Bid) {
                 <div>
                     <p class="text-sm text-muted-foreground">
                         {{
-                            auction.status === AuctionStatus.Completed
-                                ? 'Giá chốt'
-                                : 'Giá hiện tại'
+                            isFixed
+                                ? 'Giá bán'
+                                : state.status === AuctionStatus.Completed
+                                  ? 'Giá chốt'
+                                  : 'Giá hiện tại'
                         }}
                     </p>
                     <p
                         class="text-3xl font-bold text-red-600 tabular-nums dark:text-red-500"
                     >
                         {{
-                            formatVnd(
-                                listing.winning_price ?? auction.current_price,
-                            )
+                            listing.negotiable
+                                ? 'Thoả thuận'
+                                : formatVnd(
+                                      listing.winning_price ??
+                                          state.current_price,
+                                  )
                         }}
                     </p>
                     <p
-                        v-if="auction.stale"
+                        v-if="state.stale"
                         class="mt-1 text-xs text-amber-600"
                         role="status"
                     >
@@ -254,17 +295,17 @@ function cancelBid(bid: Bid) {
                     </p>
                 </div>
 
-                <dl class="grid grid-cols-2 gap-3 text-sm">
-                    <div v-if="auction.status === AuctionStatus.Running">
+                <dl v-if="!isFixed" class="grid grid-cols-2 gap-3 text-sm">
+                    <div v-if="state.status === AuctionStatus.Running">
                         <dt class="text-muted-foreground">Thời gian còn lại</dt>
                         <dd class="text-lg font-semibold">
                             <Countdown
-                                :deadline="auction.remaining_time"
+                                :deadline="state.remaining_time"
                                 done-label="Đang chốt phiên…"
                             />
                         </dd>
                     </div>
-                    <div v-else-if="auction.status === AuctionStatus.Upcoming">
+                    <div v-else-if="state.status === AuctionStatus.Upcoming">
                         <dt class="text-muted-foreground">Bắt đầu sau</dt>
                         <dd class="text-lg font-semibold">
                             <Countdown
@@ -287,14 +328,17 @@ function cancelBid(bid: Bid) {
                                 class="flex items-center gap-1 text-lg font-semibold underline-offset-4 hover:underline"
                             >
                                 <Gavel class="size-4" />
-                                {{ auction.bid_count }}
+                                {{ state.bid_count }}
                             </Link>
                         </dd>
                     </div>
                 </dl>
 
+                <FixedPricePanel v-if="isFixed" :listing="listing" />
                 <BidPanel
-                    v-if="auction.status === AuctionStatus.Running"
+                    v-else-if="
+                        auction && state.status === AuctionStatus.Running
+                    "
                     :listing="listing"
                     :auction="auction"
                 />
@@ -341,7 +385,7 @@ function cancelBid(bid: Bid) {
                         </p>
                         <p class="text-xs text-muted-foreground">
                             {{ listing.seller.listing_count }} tin đăng ·
-                            {{ listing.seller.sold_count }} phiên thành công
+                            {{ listing.seller.sold_count }} giao dịch thành công
                         </p>
                     </div>
                 </div>
@@ -364,6 +408,7 @@ function cancelBid(bid: Bid) {
             </div>
 
             <section
+                v-if="!isFixed"
                 class="order-6 rounded-lg border bg-background p-4 lg:order-none"
             >
                 <div class="mb-3 flex items-center justify-between">

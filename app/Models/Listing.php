@@ -6,6 +6,7 @@ use App\Enums\AuctionStatus;
 use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
 use App\Enums\ModerationStatus;
+use App\Enums\SaleType;
 use Carbon\CarbonInterface;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -28,12 +29,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $title
  * @property string|null $description
  * @property ItemCondition $condition
+ * @property SaleType $sale_type
  * @property ModerationStatus $moderation_status
  * @property string|null $moderation_note
  * @property int|null $relisted_from_id
  * @property int|null $auction_id
- * @property AuctionType $auction_type
+ * @property AuctionType|null $auction_type null for fixed-price listings
  * @property int $start_price
+ * @property bool $is_negotiable "giá thoả thuận": a fixed-price listing without a stated price
  * @property int|null $min_bid_price
  * @property int|null $bid_step
  * @property CarbonInterface|null $start_time
@@ -45,6 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property AuctionStatus $auction_status
  * @property int $current_price
  * @property int $bid_count
+ * @property int $view_count
  * @property int|null $leader_id
  * @property CarbonInterface|null $ends_at
  * @property int|null $winner_id
@@ -54,9 +58,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $created_at
  */
 #[Fillable([
-    'user_id', 'category_id', 'city_id', 'title', 'description', 'condition',
+    'user_id', 'category_id', 'city_id', 'title', 'description', 'condition', 'sale_type',
     'moderation_status', 'moderation_note', 'relisted_from_id', 'leader_id', 'closed_notified_at',
-    'auction_id', 'auction_type', 'start_price', 'min_bid_price', 'bid_step', 'start_time', 'end_time',
+    'auction_id', 'auction_type', 'start_price', 'is_negotiable', 'min_bid_price', 'bid_step', 'start_time', 'end_time',
     'auto_extend', 'down_time', 'down_price', 'finish_price',
     'auction_status', 'current_price', 'bid_count', 'ends_at', 'winner_id', 'winning_price', 'synced_at',
 ])]
@@ -66,12 +70,23 @@ class Listing extends Model
     use HasFactory;
 
     /**
+     * Same as the column default, so a freshly created model knows its sale
+     * type without being re-read from the database.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'sale_type' => 'auction',
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'condition' => ItemCondition::class,
+            'sale_type' => SaleType::class,
             'moderation_status' => ModerationStatus::class,
             'closed_notified_at' => 'datetime',
             'auction_type' => AuctionType::class,
@@ -81,6 +96,7 @@ class Listing extends Model
             'ends_at' => 'datetime',
             'synced_at' => 'datetime',
             'auto_extend' => 'boolean',
+            'is_negotiable' => 'boolean',
         ];
     }
 
@@ -172,14 +188,51 @@ class Listing extends Model
         return $this->hasMany(ListingReport::class);
     }
 
+    public function isAuction(): bool
+    {
+        return $this->sale_type === SaleType::Auction;
+    }
+
+    public function isFixedPrice(): bool
+    {
+        return $this->sale_type === SaleType::Fixed;
+    }
+
     /**
-     * Visible to everyone: approved by moderation and live in the engine. A
-     * listing without an auction_id is either waiting for approval or the
-     * leftover of a failed create.
+     * Whether the listing can be shown at all. An auction listing needs its
+     * auction in the engine: without one it is waiting for approval, or is the
+     * leftover of a failed create. A fixed-price listing needs nothing else.
+     */
+    public function isLive(): bool
+    {
+        return $this->isFixedPrice() || $this->auction_id !== null;
+    }
+
+    /**
+     * Visible to everyone: live, and approved by moderation.
      */
     public function isPublished(): bool
     {
-        return $this->auction_id !== null && $this->moderation_status === ModerationStatus::Approved;
+        return $this->isLive() && $this->moderation_status === ModerationStatus::Approved;
+    }
+
+    /**
+     * Fixed-price listings reuse the auction statuses: Running is "for sale",
+     * Completed is "sold", CancelledBySeller is "taken down", Expired is
+     * "ran out of time" (see the listings:expire command).
+     */
+    public function statusLabel(): string
+    {
+        if ($this->isAuction()) {
+            return $this->auction_status->label();
+        }
+
+        return match ($this->auction_status) {
+            AuctionStatus::Completed => 'Đã bán',
+            AuctionStatus::Running, AuctionStatus::Upcoming => 'Đang bán',
+            AuctionStatus::Expired => 'Hết hạn',
+            default => 'Đã gỡ',
+        };
     }
 
     /**
@@ -187,7 +240,11 @@ class Listing extends Model
      */
     public function scopePublished(Builder $query): void
     {
-        $query->whereNotNull('auction_id')->where('moderation_status', ModerationStatus::Approved);
+        $query
+            ->where('moderation_status', ModerationStatus::Approved)
+            ->where(fn (Builder $live) => $live
+                ->where('sale_type', SaleType::Fixed)
+                ->orWhereNotNull('auction_id'));
     }
 
     /**

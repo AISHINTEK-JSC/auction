@@ -103,7 +103,10 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 
 **Tin đăng**
 
-- Đăng tin đấu giá xuôi / ngược; **sửa** nội dung, ảnh và thẻ sau khi đăng (giá và thời gian thuộc về engine, không sửa được).
+- Hai hình thức bán: **đấu giá** (xuôi / ngược, do engine xử lý) hoặc **chỉ đăng tin với giá cố định**. Tin giá cố định không gọi engine: không có lượt đặt hay đếm ngược, thành viên đã đăng nhập và xác thực email thấy email, số điện thoại của người bán để liên hệ, và người bán tự bấm "Đánh dấu đã bán" hoặc "Gỡ tin". Về dữ liệu, tin giá cố định có `sale_type = fixed`, `auction_id` và `auction_type` để trống, và dùng lại cột `auction_status` (đang diễn ra = đang bán, hoàn tất = đã bán, người bán huỷ = đã gỡ).
+- Tin giá cố định có thể để **giá thoả thuận** (không ghi giá), và **tự hết hạn** sau `FIXED_LISTING_DAYS` ngày (mặc định 30): lệnh `listings:expire` chạy 15 phút một lần, chuyển tin sang "Hết hạn" và báo cho người bán; tin hết hạn đăng lại được.
+- **Lượt xem** được đếm một lần cho mỗi phiên trình duyệt, không tính người bán và các lần trang tự làm mới. Trang tìm kiếm có sắp xếp "Xem nhiều nhất".
+- **Sửa** nội dung, ảnh và thẻ sau khi đăng (giá và thời gian của phiên đấu giá thuộc về engine, không sửa được).
 - **Đăng lại** phiên kết thúc không có người thắng hoặc tin bị từ chối: tạo tin mới, ảnh được chép từ tin cũ.
 - Trang theo danh mục `/c/{slug}`, theo thẻ `/t/{slug}`, tìm kiếm `/search`, và trang công khai của thành viên `/u/{id}`.
 
@@ -113,8 +116,9 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 - **Bước giá** do người bán đặt cho đấu giá xuôi (tuỳ chọn). Engine không có khái niệm này nên app tự kiểm tra: giá gõ tay phải đạt "giá hiện tại + bước giá", nút đặt nhanh đặt đúng mức đó; lượt mở đầu được phép bằng giá khởi điểm. Tin không đặt bước giá thì chỉ cần cao hơn giá hiện tại.
 - **Theo dõi** phiên; trang "Phiên đấu giá của tôi" có các tab Đang bán, Đang tham gia (kèm đang dẫn đầu / bị vượt giá), Theo dõi, Đã thắng, Đã kết thúc, Chờ duyệt.
 - Khi phiên kết thúc, người bán và người thắng thấy **thông tin liên hệ** của nhau, **đánh giá** nhau (1–5 sao), và một trong hai có thể ghi nhận **người thắng từ bỏ**: engine chuyển kết quả cho người đặt giá cao kế tiếp, không còn ai thì huỷ phiên.
+- **Hình phạt khi từ bỏ kết quả**: mỗi lần người thắng từ bỏ được ghi lại. Trong 90 ngày, lần đầu chỉ cảnh báo, lần thứ hai bị khoá đặt giá 7 ngày, từ lần thứ ba là 30 ngày (chỉnh trong `config/marketplace.php`). Lệnh khoá tự hết hạn; admin gỡ sớm được ở trang Thành viên. Lần từ bỏ do người bán ghi nhận ("Người thắng không mua") cũng được tính, và cột `forfeits.declared_by` cho biết ai ghi nhận.
 
-**Thông báo** (chuông trên header + email): bị vượt giá, thắng / thua, phiên của mình có người thắng hoặc không, người thắng từ bỏ, tin được duyệt / từ chối / ẩn, trúng quà tặng. Email được gửi ngay trong request, trừ thông báo quà tặng mới gửi cho toàn bộ thành viên: loại này đi qua hàng đợi nên cần service `queue` (hoặc `php artisan queue:work` khi chạy trực tiếp). Khi chạy Docker xem email ở Mailpit.
+**Thông báo** (chuông trên header + email; bấm chuông sổ xuống 8 thông báo mới nhất, tải lúc mở, có "Xem tất cả" dẫn tới `/notifications`): bị vượt giá, thắng / thua, phiên của mình có người thắng hoặc không, người thắng từ bỏ, tin được duyệt / từ chối / ẩn, trúng quà tặng. Email được gửi ngay trong request, trừ thông báo quà tặng mới gửi cho toàn bộ thành viên: loại này đi qua hàng đợi nên cần service `queue` (hoặc `php artisan queue:work` khi chạy trực tiếp). Khi chạy Docker xem email ở Mailpit.
 
 **Kiểm duyệt**
 
@@ -148,6 +152,7 @@ resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, Commen
 
 `/admin`, dành cho quản trị viên và kiểm duyệt viên:
 
+- **Nhật ký thao tác** (chỉ quản trị viên, chỉ đọc): ai đã duyệt, từ chối, ẩn tin, huỷ phiên, khoá / mở khoá, đổi vai trò, gỡ cấm đặt giá, xoá bình luận, tạo / quay / xoá quà tặng, sửa danh mục, chặn IP / email, đổi cài đặt, và vào lúc nào. Mỗi dòng lưu sẵn mô tả đầy đủ nên vẫn đọc được sau khi đối tượng bị xoá.
 - **Bảng điều khiển**: số phiên, phiên thành công, doanh số (tổng giá chốt), người dùng mới, tin chờ duyệt, báo cáo chưa xử lý.
 - **Thành viên**: khoá / mở khoá, đổi vai trò, và nút **Chính sách mật khẩu** (độ dài, chữ hoa/thường, chữ số, ký tự đặc biệt) áp dụng cho đăng ký và đổi mật khẩu.
 - **Tin đấu giá**: duyệt, từ chối, ẩn, đồng bộ lại với engine, huỷ phiên; bật / tắt duyệt tin trước khi hiển thị.

@@ -6,9 +6,11 @@ use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Giveaways\Pages\ManageGiveaways;
 use App\Models\Giveaway;
 use App\Services\GiveawayService;
+use App\Support\AdminLog;
 use BackedEnum;
 use DomainException;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -93,6 +95,12 @@ class GiveawayResource extends Resource
                             return;
                         }
 
+                        AdminLog::record('giveaway.drawn', $record, sprintf(
+                            'Quay thưởng "%s": %s',
+                            $record->title,
+                            $winners->map(fn ($entry) => $entry->user->name.' ('.$entry->user->member_code.')')->join(', '),
+                        ));
+
                         Notification::make()
                             ->title('Đã quay thưởng')
                             ->body('Người trúng: '.$winners->map(fn ($entry) => $entry->user->name.' ('.$entry->user->member_code.')')->join(', '))
@@ -100,8 +108,12 @@ class GiveawayResource extends Resource
                             ->persistent()
                             ->send();
                     }),
-                EditAction::make()->visible(fn (Giveaway $record) => ! $record->isDrawn()),
-                DeleteAction::make(),
+                ActionGroup::make([
+                    EditAction::make()->visible(fn (Giveaway $record) => ! $record->isDrawn())
+                        ->after(fn (Giveaway $record) => AdminLog::record('giveaway.updated', $record, 'Sửa chương trình quà tặng "'.$record->title.'"')),
+                    DeleteAction::make()
+                        ->before(fn (Giveaway $record) => AdminLog::record('giveaway.deleted', $record, 'Xoá chương trình quà tặng "'.$record->title.'"')),
+                ]),
             ]);
     }
 

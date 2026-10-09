@@ -53,6 +53,7 @@ class DashboardController extends Controller
                     'edit' => $user->can('update', $listing),
                     'cancel' => $user->can('cancel', $listing),
                     'relist' => $user->can('relist', $listing),
+                    'mark_sold' => $user->can('markSold', $listing),
                 ],
             ])
             ->all());

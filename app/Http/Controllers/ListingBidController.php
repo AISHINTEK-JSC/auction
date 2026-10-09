@@ -27,7 +27,7 @@ class ListingBidController extends Controller
      */
     public function index(Request $request, Listing $listing, ListingSyncService $sync): Response
     {
-        abort_unless(Gate::forUser($request->user())->allows('view', $listing), 404);
+        abort_unless($listing->isAuction() && Gate::forUser($request->user())->allows('view', $listing), 404);
 
         return Inertia::render('listings/Bids', [
             'listing' => ['id' => $listing->id, 'title' => $listing->title],
@@ -46,12 +46,19 @@ class ListingBidController extends Controller
         ListingSyncService $sync,
         AuctionNotifier $notifier,
     ): RedirectResponse {
-        abort_unless($listing->isPublished(), 404);
+        abort_unless($listing->isAuction() && $listing->isPublished(), 404);
 
         $bidder = $request->user();
 
         if ($bidder->id === $listing->user_id) {
             throw ValidationException::withMessages(['bid_price' => __('engine.E_109')]);
+        }
+
+        if ($bidder->isBidBanned()) {
+            throw ValidationException::withMessages(['bid_price' => sprintf(
+                'Bạn bị tạm khoá đặt giá tới %s vì đã từ bỏ kết quả đấu giá nhiều lần.',
+                $bidder->bid_banned_until->format('H:i d/m/Y'),
+            )]);
         }
 
         $type = BidType::from((int) $request->validated('bid_type'));
@@ -125,7 +132,7 @@ class ListingBidController extends Controller
      */
     public function destroy(Request $request, Listing $listing, AuctionEngineClient $engine, ListingSyncService $sync): RedirectResponse
     {
-        abort_unless($listing->isPublished(), 404);
+        abort_unless($listing->isAuction() && $listing->isPublished(), 404);
 
         $data = $request->validate(['bid_price' => ['required', 'integer', 'gt:0']]);
         $bidder = $request->user();
