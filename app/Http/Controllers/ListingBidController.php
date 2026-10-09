@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AuctionStatus;
+use App\Enums\AuctionType;
 use App\Enums\BidType;
 use App\Http\Requests\Listings\PlaceBidRequest;
 use App\Models\Listing;
@@ -54,16 +55,16 @@ class ListingBidController extends Controller
         }
 
         $type = BidType::from((int) $request->validated('bid_type'));
+        $price = $type === BidType::Limit ? (int) $request->validated('bid_price') : null;
         $previousLeader = $listing->leader_id;
         $error = null;
 
+        if ($listing->auction_type === AuctionType::Up && $listing->bid_step !== null) {
+            [$type, $price] = $this->applyBidStep($listing, $type, $price, $sync);
+        }
+
         try {
-            $engine->placeBid(
-                (int) $listing->auction_id,
-                $bidder->id,
-                $type->value,
-                $type === BidType::Limit ? (int) $request->validated('bid_price') : null,
-            );
+            $engine->placeBid((int) $listing->auction_id, $bidder->id, $type->value, $price);
         } catch (EngineException $e) {
             $error = $e->getMessage();
         }
@@ -79,7 +80,7 @@ class ListingBidController extends Controller
         // Feeds "auctions I take part in". For a quick bid the engine picked the
         // price, which is the current price right after the refresh.
         $listing->bidders()->syncWithoutDetaching([$bidder->id => [
-            'last_bid_price' => $type === BidType::Limit ? (int) $request->validated('bid_price') : $listing->current_price,
+            'last_bid_price' => $price ?? $listing->current_price,
         ]]);
 
         if ($previousLeader !== null && $previousLeader !== $bidder->id && $listing->leader_id === $bidder->id) {
@@ -89,6 +90,34 @@ class ListingBidController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Đặt giá thành công.']);
 
         return back();
+    }
+
+    /**
+     * The seller's minimum raise. The engine knows nothing about it (its own
+     * quick bid adds a fixed 1, 10 or 100 đ), so it is enforced here: a typed
+     * bid must reach "current price + step", and a quick bid is placed at
+     * exactly that price. The opening bid may equal the start price.
+     *
+     * @return array{BidType, int}
+     */
+    private function applyBidStep(Listing $listing, BidType $type, ?int $price, ListingSyncService $sync): array
+    {
+        $state = $sync->liveState($listing);
+        $minimum = $state['current_price'] + ($state['highest_bidder_id'] !== null ? (int) $listing->bid_step : 0);
+
+        if ($type === BidType::Market) {
+            return [BidType::Limit, $minimum];
+        }
+
+        if ($price < $minimum) {
+            throw ValidationException::withMessages(['bid_price' => sprintf(
+                'Giá đặt tối thiểu là %s đ (bước giá %s đ).',
+                number_format($minimum, 0, ',', '.'),
+                number_format((int) $listing->bid_step, 0, ',', '.'),
+            )]);
+        }
+
+        return [BidType::Limit, (int) $price];
     }
 
     /**

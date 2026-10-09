@@ -3,15 +3,15 @@ import { Head, Link, router, usePoll } from '@inertiajs/vue3';
 import {
     BadgeCheck,
     Gavel,
-    ImageOff,
     MapPin,
     TrendingDown,
     TrendingUp,
 } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, watch } from 'vue';
 import BidPanel from '@/components/marketplace/BidPanel.vue';
 import CommentThread from '@/components/marketplace/CommentThread.vue';
 import Countdown from '@/components/marketplace/Countdown.vue';
+import ImageGallery from '@/components/marketplace/ImageGallery.vue';
 import ListingActions from '@/components/marketplace/ListingActions.vue';
 import ListingGrid from '@/components/marketplace/ListingGrid.vue';
 import SettlementPanel from '@/components/marketplace/SettlementPanel.vue';
@@ -46,7 +46,6 @@ const props = defineProps<{
     related: ListingCard[];
 }>();
 
-const activeImage = ref(0);
 const isDown = computed(() => props.listing.auction_type === AuctionType.Down);
 const isOpen = computed(
     () =>
@@ -97,42 +96,119 @@ function cancelBid(bid: Bid) {
         </template>
     </p>
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <!-- Gallery -->
-        <section class="space-y-3">
-            <div
-                class="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border bg-background"
-            >
-                <img
-                    v-if="listing.images.length"
-                    :src="listing.images[activeImage]"
-                    :alt="listing.title"
-                    class="size-full object-contain"
-                />
-                <ImageOff v-else class="size-10 text-muted-foreground" />
-            </div>
-            <div v-if="listing.images.length > 1" class="flex flex-wrap gap-2">
-                <button
-                    v-for="(image, index) in listing.images"
-                    :key="image"
-                    type="button"
-                    class="size-16 overflow-hidden rounded-md border-2"
-                    :class="
-                        index === activeImage
-                            ? 'border-primary'
-                            : 'border-transparent'
-                    "
-                    :aria-label="`Ảnh ${index + 1}`"
-                    @click="activeImage = index"
-                >
-                    <img :src="image" alt="" class="size-full object-cover" />
-                </button>
-            </div>
-        </section>
+    <!-- Two independent columns on wide screens, so a tall right column never
+         leaves a gap under the photos. On phones the column wrappers dissolve
+         (display: contents) and the blocks are ordered one by one: photos,
+         auction, result, seller, details, bids, comments. -->
+    <div
+        class="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start"
+    >
+        <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-6">
+            <ImageGallery
+                class="order-1 lg:order-none"
+                :images="listing.images"
+                :alt="listing.title"
+            />
 
-        <!-- Auction panel -->
-        <aside class="space-y-4">
-            <div class="space-y-4 rounded-lg border bg-background p-4">
+            <section
+                class="order-5 rounded-lg border bg-background p-4 lg:order-none"
+            >
+                <h2 class="mb-3 text-lg font-semibold">Thông tin sản phẩm</h2>
+                <dl
+                    class="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3"
+                >
+                    <div>
+                        <dt class="text-muted-foreground">Tình trạng</dt>
+                        <dd>{{ listing.condition }}</dd>
+                    </div>
+                    <div v-if="listing.category">
+                        <dt class="text-muted-foreground">Danh mục</dt>
+                        <dd>
+                            <Link
+                                :href="categoryShow(listing.category.slug)"
+                                class="underline underline-offset-4"
+                                >{{ listing.category.name }}</Link
+                            >
+                        </dd>
+                    </div>
+                    <div v-if="listing.city">
+                        <dt class="text-muted-foreground">Khu vực</dt>
+                        <dd class="flex items-center gap-1">
+                            <MapPin class="size-3.5" />{{ listing.city }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-muted-foreground">Giá khởi điểm</dt>
+                        <dd>{{ formatVnd(listing.start_price) }}</dd>
+                    </div>
+                    <div v-if="listing.bid_step">
+                        <dt class="text-muted-foreground">Bước giá</dt>
+                        <dd>{{ formatVnd(listing.bid_step) }}</dd>
+                    </div>
+                    <div v-if="listing.min_bid_price">
+                        <dt class="text-muted-foreground">
+                            Giá sàn (chỉ bạn thấy)
+                        </dt>
+                        <dd>{{ formatVnd(listing.min_bid_price) }}</dd>
+                    </div>
+                    <template v-if="isDown">
+                        <div>
+                            <dt class="text-muted-foreground">Mỗi lần giảm</dt>
+                            <dd>
+                                {{ formatVnd(listing.down_price) }} /
+                                {{ Math.round((listing.down_time ?? 0) / 60) }}
+                                phút
+                            </dd>
+                        </div>
+                        <div v-if="listing.finish_price">
+                            <dt class="text-muted-foreground">Giá thấp nhất</dt>
+                            <dd>{{ formatVnd(listing.finish_price) }}</dd>
+                        </div>
+                    </template>
+                    <div v-else-if="listing.auto_extend">
+                        <dt class="text-muted-foreground">Gia hạn</dt>
+                        <dd>Tự động khi có giá phút chót</dd>
+                    </div>
+                    <div>
+                        <dt class="text-muted-foreground">Đăng lúc</dt>
+                        <dd>{{ formatDateTime(listing.created_at) }}</dd>
+                    </div>
+                </dl>
+
+                <!-- Sanitized on the server (CreateListing::sanitize). -->
+                <div
+                    v-if="listing.description"
+                    class="prose-listing text-sm leading-6"
+                    v-html="listing.description"
+                />
+
+                <div
+                    v-if="listing.tags.length"
+                    class="mt-4 flex flex-wrap gap-2"
+                >
+                    <Badge
+                        v-for="tag in listing.tags"
+                        :key="tag.slug"
+                        variant="secondary"
+                        as-child
+                    >
+                        <Link :href="tagShow(tag.slug)">#{{ tag.name }}</Link>
+                    </Badge>
+                </div>
+            </section>
+
+            <section
+                class="order-7 rounded-lg border bg-background p-4 lg:order-none"
+            >
+                <CommentThread :listing-id="listing.id" :comments="comments" />
+            </section>
+        </div>
+
+        <div class="contents lg:flex lg:flex-col lg:gap-6">
+            <!-- Auction panel -->
+            <div
+                class="order-2 space-y-4 rounded-lg border bg-background p-4 lg:order-none"
+            >
                 <div class="flex flex-wrap items-center gap-2">
                     <Badge :variant="isDown ? 'destructive' : 'default'">
                         <TrendingDown v-if="isDown" />
@@ -225,13 +301,16 @@ function cancelBid(bid: Bid) {
             </div>
 
             <SettlementPanel
+                class="order-3 lg:order-none"
                 v-if="listing.can.settle"
                 :key="listing.winning_price ?? 0"
                 :listing="listing"
             />
 
             <!-- Seller -->
-            <div class="rounded-lg border bg-background p-4">
+            <div
+                class="order-4 rounded-lg border bg-background p-4 lg:order-none"
+            >
                 <div class="flex items-center gap-3">
                     <Avatar class="size-11">
                         <AvatarImage
@@ -283,99 +362,10 @@ function cancelBid(bid: Bid) {
                     </li>
                 </ul>
             </div>
-        </aside>
-    </div>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <div class="space-y-6">
-            <section class="rounded-lg border bg-background p-4">
-                <h2 class="mb-3 text-lg font-semibold">Thông tin sản phẩm</h2>
-                <dl
-                    class="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3"
-                >
-                    <div>
-                        <dt class="text-muted-foreground">Tình trạng</dt>
-                        <dd>{{ listing.condition }}</dd>
-                    </div>
-                    <div v-if="listing.category">
-                        <dt class="text-muted-foreground">Danh mục</dt>
-                        <dd>
-                            <Link
-                                :href="categoryShow(listing.category.slug)"
-                                class="underline underline-offset-4"
-                                >{{ listing.category.name }}</Link
-                            >
-                        </dd>
-                    </div>
-                    <div v-if="listing.city">
-                        <dt class="text-muted-foreground">Khu vực</dt>
-                        <dd class="flex items-center gap-1">
-                            <MapPin class="size-3.5" />{{ listing.city }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-muted-foreground">Giá khởi điểm</dt>
-                        <dd>{{ formatVnd(listing.start_price) }}</dd>
-                    </div>
-                    <div v-if="listing.min_bid_price">
-                        <dt class="text-muted-foreground">
-                            Giá sàn (chỉ bạn thấy)
-                        </dt>
-                        <dd>{{ formatVnd(listing.min_bid_price) }}</dd>
-                    </div>
-                    <template v-if="isDown">
-                        <div>
-                            <dt class="text-muted-foreground">Mỗi lần giảm</dt>
-                            <dd>
-                                {{ formatVnd(listing.down_price) }} /
-                                {{ Math.round((listing.down_time ?? 0) / 60) }}
-                                phút
-                            </dd>
-                        </div>
-                        <div v-if="listing.finish_price">
-                            <dt class="text-muted-foreground">Giá thấp nhất</dt>
-                            <dd>{{ formatVnd(listing.finish_price) }}</dd>
-                        </div>
-                    </template>
-                    <div v-else-if="listing.auto_extend">
-                        <dt class="text-muted-foreground">Gia hạn</dt>
-                        <dd>Tự động khi có giá phút chót</dd>
-                    </div>
-                    <div>
-                        <dt class="text-muted-foreground">Đăng lúc</dt>
-                        <dd>{{ formatDateTime(listing.created_at) }}</dd>
-                    </div>
-                </dl>
-
-                <!-- Sanitized on the server (CreateListing::sanitize). -->
-                <div
-                    v-if="listing.description"
-                    class="prose-listing text-sm leading-6"
-                    v-html="listing.description"
-                />
-
-                <div
-                    v-if="listing.tags.length"
-                    class="mt-4 flex flex-wrap gap-2"
-                >
-                    <Badge
-                        v-for="tag in listing.tags"
-                        :key="tag.slug"
-                        variant="secondary"
-                        as-child
-                    >
-                        <Link :href="tagShow(tag.slug)">#{{ tag.name }}</Link>
-                    </Badge>
-                </div>
-            </section>
-
-            <section class="rounded-lg border bg-background p-4">
-                <CommentThread :listing-id="listing.id" :comments="comments" />
-            </section>
-        </div>
-
-        <aside>
-            <section class="rounded-lg border bg-background p-4">
+            <section
+                class="order-6 rounded-lg border bg-background p-4 lg:order-none"
+            >
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="text-lg font-semibold">Lượt đặt gần đây</h2>
                     <Link
@@ -418,7 +408,7 @@ function cancelBid(bid: Bid) {
                     Chưa có lượt đặt giá nào.
                 </p>
             </section>
-        </aside>
+        </div>
     </div>
 
     <section v-if="sameSeller.length" class="mt-8 space-y-3">

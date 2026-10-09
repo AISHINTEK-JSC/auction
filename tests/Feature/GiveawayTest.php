@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Giveaways\Pages\ManageGiveaways;
 use App\Models\Giveaway;
 use App\Models\GiveawayEntry;
 use App\Models\User;
 use App\Services\GiveawayService;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia as Assert;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class GiveawayTest extends TestCase
@@ -113,6 +116,86 @@ class GiveawayTest extends TestCase
         // A giveaway is drawn once, and nobody can join afterwards.
         $this->expectException(DomainException::class);
         app(GiveawayService::class)->draw($giveaway);
+    }
+
+    public function test_a_new_giveaway_is_announced_to_every_member_who_can_join(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $members = User::factory()->count(3)->create();
+        $unverified = User::factory()->unverified()->create();
+        $blocked = User::factory()->create();
+        $blocked->forceFill(['blocked_at' => now()])->save();
+
+        $giveaway = $this->giveaway(['title' => 'Tặng mũ', 'prize' => 'Mũ lưỡi trai']);
+
+        $this->assertSame(3, app(GiveawayService::class)->announce($giveaway, $admin));
+
+        foreach ($members as $member) {
+            $notification = $member->notifications()->sole();
+            $this->assertSame('giveaway_new', $notification->data['kind']);
+            $this->assertSame('Quà tặng mới: Tặng mũ', $notification->data['title']);
+            $this->assertStringContainsString('Mũ lưỡi trai', $notification->data['body']);
+            $this->assertSame(route('giveaways.show', $giveaway, absolute: false), $notification->data['url']);
+        }
+
+        $this->assertSame(0, $admin->notifications()->count());
+        $this->assertSame(0, $unverified->notifications()->count());
+        $this->assertSame(0, $blocked->notifications()->count());
+
+        // The bell shows it and following it leads to the giveaway.
+        $member = $members->first();
+        $this->actingAs($member)->get(route('home'))->assertInertia(fn (Assert $page) => $page->where('unreadNotifications', 1));
+        $this->actingAs($member)->get(route('notifications.show', $member->notifications()->sole()->id))
+            ->assertRedirect(route('giveaways.show', $giveaway, absolute: false));
+    }
+
+    public function test_the_announcement_is_emailed_through_the_queue_but_shown_in_the_app_at_once(): void
+    {
+        config(['queue.default' => 'database']);
+
+        $member = User::factory()->create();
+        $giveaway = $this->giveaway();
+
+        app(GiveawayService::class)->announce($giveaway);
+
+        // In the app immediately; the email waits for the queue worker.
+        $this->assertSame(1, $member->notifications()->count());
+        $this->assertDatabaseCount('jobs', 1);
+        Mail::fake();
+
+        $this->artisan('queue:work', ['--once' => true])->assertSuccessful();
+
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertSame(1, $member->notifications()->count());
+    }
+
+    public function test_a_giveaway_that_is_already_closed_is_not_announced(): void
+    {
+        User::factory()->create();
+
+        $this->assertSame(0, app(GiveawayService::class)->announce($this->giveaway(['ends_at' => now()->subMinute()])));
+        $this->assertDatabaseCount('notifications', 0);
+    }
+
+    public function test_creating_a_giveaway_in_the_admin_panel_announces_it(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->create();
+
+        Livewire::actingAs($admin)
+            ->test(ManageGiveaways::class)
+            ->callAction('create', [
+                'title' => 'Tặng sổ tay',
+                'prize' => 'Sổ tay',
+                'winner_count' => 1,
+                'ends_at' => now()->addDays(2)->format('Y-m-d H:i:s'),
+            ])
+            ->assertHasNoActionErrors();
+
+        $giveaway = Giveaway::query()->sole();
+        $this->assertSame('Tặng sổ tay', $giveaway->title);
+        $this->assertSame('giveaway_new', $member->notifications()->sole()->data['kind']);
+        $this->assertSame(0, $admin->notifications()->count());
     }
 
     public function test_a_draw_with_fewer_entries_than_prizes_makes_everyone_a_winner(): void

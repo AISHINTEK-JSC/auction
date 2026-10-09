@@ -112,6 +112,7 @@ class ListingController extends Controller
                 'auction_type' => $listing->auction_type->value,
                 'start_price' => $listing->start_price,
                 'min_bid_price' => $listing->min_bid_price,
+                'bid_step' => $listing->bid_step,
                 'auto_extend' => $listing->auto_extend,
                 'down_minutes' => $listing->down_time ? intdiv($listing->down_time, 60) : null,
                 'down_price' => $listing->down_price,

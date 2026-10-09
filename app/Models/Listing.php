@@ -35,6 +35,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property AuctionType $auction_type
  * @property int $start_price
  * @property int|null $min_bid_price
+ * @property int|null $bid_step
  * @property CarbonInterface|null $start_time
  * @property CarbonInterface|null $end_time
  * @property bool $auto_extend
@@ -55,7 +56,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'user_id', 'category_id', 'city_id', 'title', 'description', 'condition',
     'moderation_status', 'moderation_note', 'relisted_from_id', 'leader_id', 'closed_notified_at',
-    'auction_id', 'auction_type', 'start_price', 'min_bid_price', 'start_time', 'end_time',
+    'auction_id', 'auction_type', 'start_price', 'min_bid_price', 'bid_step', 'start_time', 'end_time',
     'auto_extend', 'down_time', 'down_price', 'finish_price',
     'auction_status', 'current_price', 'bid_count', 'ends_at', 'winner_id', 'winning_price', 'synced_at',
 ])]

@@ -26,20 +26,36 @@ const form = useForm<{ bid_type: number; bid_price: number | '' }>({
     bid_price: '',
 });
 
-// Same rule as the engine (AuctionModel::computeAlpha). The engine only applies it
-// to quick bids; a typed bid just has to beat the current price.
+const hasBids = computed(() => props.auction.highest_bidder_id !== null);
+
+// What one quick bid adds. The seller's step when there is one; otherwise the
+// engine's own rule (AuctionModel::computeAlpha), which it applies to quick
+// bids only: a typed bid then just has to beat the current price.
 const step = computed(() => {
+    if (props.listing.bid_step) {
+        return props.listing.bid_step;
+    }
+
     const digits = String(props.auction.current_price).length;
 
     return digits >= 5 ? 100 : digits === 4 ? 10 : 1;
 });
+
+// Lowest price the server accepts when the seller set a step (ListingBidController).
+const minimum = computed(
+    () => props.auction.current_price + (hasBids.value ? step.value : 0),
+);
 
 const hint = computed(() => {
     if (isDown.value) {
         return `Giá chờ phải thấp hơn hoặc bằng ${formatVnd(props.auction.current_price)} và chia hết cho ${formatVnd(props.listing.down_price)}.`;
     }
 
-    return props.auction.bid_count > 0
+    if (props.listing.bid_step && hasBids.value) {
+        return `Giá đặt tối thiểu ${formatVnd(minimum.value)} (bước giá ${formatVnd(step.value)}).`;
+    }
+
+    return hasBids.value
         ? `Giá đặt phải cao hơn ${formatVnd(props.auction.current_price)}.`
         : `Giá đặt tối thiểu ${formatVnd(props.auction.current_price)}.`;
 });
@@ -90,10 +106,11 @@ function submit(type: number) {
             <InputError :message="form.errors.bid_price" />
         </div>
 
-        <!-- With no bids yet, a quick bid on an ascending auction is placed at the
-             seller's hidden reserve price, so the buyer could not know the amount. -->
+        <!-- Without a seller's step, the engine places an opening quick bid at the
+             hidden reserve price, so the buyer could not know the amount: no
+             quick bid until someone has bid. With a step the app sets the price. -->
         <Button
-            v-if="isDown || auction.bid_count > 0"
+            v-if="isDown || hasBids || listing.bid_step"
             type="button"
             variant="outline"
             class="w-full"
@@ -102,6 +119,9 @@ function submit(type: number) {
         >
             <template v-if="isDown">
                 Mua ngay với giá {{ formatVnd(auction.current_price) }}
+            </template>
+            <template v-else-if="listing.bid_step">
+                Đặt nhanh {{ formatVnd(minimum) }}
             </template>
             <template v-else>Đặt nhanh +{{ formatVnd(step) }}</template>
         </Button>

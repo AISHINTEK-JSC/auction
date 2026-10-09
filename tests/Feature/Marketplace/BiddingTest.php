@@ -79,6 +79,76 @@ class BiddingTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_with_a_seller_step_a_bid_must_reach_current_price_plus_step(): void
+    {
+        $leader = User::factory()->create();
+        $listing = Listing::factory()->create(['auction_id' => 7, 'bid_step' => 50000]);
+
+        Http::fake([
+            'engine.test/api/v1/bid' => Http::response($this->engineOk(['auction_id' => 7])),
+            'engine.test/api/v1/auction/7' => Http::response($this->engineOk($this->engineAuction(7, [
+                'current_price' => 200000,
+                'bid_number' => 1,
+                'highest_bidder_id' => (string) $leader->id,
+            ]))),
+        ]);
+
+        $bidder = User::factory()->create();
+
+        // 200.000 + 50.000 is the floor: one đồng less never reaches the engine.
+        $this->actingAs($bidder)
+            ->post(route('listings.bids.store', $listing), ['bid_type' => 1, 'bid_price' => 249999])
+            ->assertSessionHasErrors(['bid_price' => 'Giá đặt tối thiểu là 250.000 đ (bước giá 50.000 đ).']);
+
+        Http::assertNotSent(fn (Request $request) => $request->url() === 'http://engine.test/api/v1/bid');
+
+        $this->actingAs($bidder)
+            ->post(route('listings.bids.store', $listing), ['bid_type' => 1, 'bid_price' => 250000])
+            ->assertSessionHasNoErrors();
+
+        Http::assertSent(fn (Request $request) => $request->url() === 'http://engine.test/api/v1/bid'
+            && $request->data()['bid_type'] === 1
+            && $request->data()['bid_price'] === 250000);
+    }
+
+    public function test_with_a_seller_step_a_quick_bid_is_placed_at_exactly_the_floor(): void
+    {
+        $leader = User::factory()->create();
+        $listing = Listing::factory()->create(['auction_id' => 7, 'bid_step' => 50000]);
+
+        Http::fake([
+            'engine.test/api/v1/bid' => Http::response($this->engineOk(['auction_id' => 7])),
+            'engine.test/api/v1/auction/7' => Http::response($this->engineOk($this->engineAuction(7, [
+                'current_price' => 200000,
+                'bid_number' => 1,
+                'highest_bidder_id' => (string) $leader->id,
+            ]))),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('listings.bids.store', $listing), ['bid_type' => 2])
+            ->assertSessionHasNoErrors();
+
+        // Sent as a named price, not as the engine's own quick bid (which adds only 100 đ).
+        Http::assertSent(fn (Request $request) => $request->url() === 'http://engine.test/api/v1/bid'
+            && $request->data()['bid_type'] === 1
+            && $request->data()['bid_price'] === 250000);
+    }
+
+    public function test_the_opening_bid_may_equal_the_start_price_even_with_a_step(): void
+    {
+        $listing = Listing::factory()->create(['auction_id' => 7, 'bid_step' => 50000]);
+
+        Http::fake([
+            'engine.test/api/v1/bid' => Http::response($this->engineOk(['auction_id' => 7])),
+            'engine.test/api/v1/auction/7' => Http::response($this->engineOk($this->engineAuction(7, ['current_price' => 100000]))),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('listings.bids.store', $listing), ['bid_type' => 1, 'bid_price' => 100000])
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_guests_and_unverified_users_cannot_bid(): void
     {
         $listing = Listing::factory()->create(['auction_id' => 7]);

@@ -63,6 +63,7 @@ class CreateListing
                     'auction_type' => $type,
                     'start_price' => $data['start_price'],
                     'min_bid_price' => $type === AuctionType::Up ? ($data['min_bid_price'] ?? null) : null,
+                    'bid_step' => $type === AuctionType::Up ? ($data['bid_step'] ?? null) : null,
                     'start_time' => $startTime,
                     'end_time' => $endTime,
                     'auto_extend' => $type === AuctionType::Up && ($data['auto_extend'] ?? false),

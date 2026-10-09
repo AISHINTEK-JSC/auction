@@ -64,6 +64,7 @@ class ListingPresenter
             'start_price' => $listing->start_price,
             // The reserve price is the seller's secret.
             'min_bid_price' => $isOwner ? $listing->min_bid_price : null,
+            'bid_step' => $listing->bid_step,
             'auto_extend' => $listing->auto_extend,
             'down_time' => $listing->down_time,
             'down_price' => $listing->down_price,

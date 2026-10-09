@@ -50,6 +50,12 @@ services:
         <<: *app
         command: ['php', 'artisan', 'schedule:work']
 
+    # Sends queued emails (the giveaway announcement goes to every member).
+    # queue:listen reloads the code for each job, which suits a bind-mounted dev setup.
+    queue:
+        <<: *app
+        command: ['php', 'artisan', 'queue:listen', '--tries=3', '--timeout=60']
+
     vite:
         <<: *app
         command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']

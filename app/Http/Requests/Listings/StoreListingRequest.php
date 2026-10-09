@@ -55,6 +55,8 @@ class StoreListingRequest extends FormRequest
 
             'end_time' => ["required_if:auction_type,{$up}", 'nullable', 'date'],
             'min_bid_price' => ['nullable', 'integer', 'gt:start_price', 'max:999999999999'],
+            // Not an engine field: this app enforces it when bids are placed.
+            'bid_step' => ['nullable', 'integer', 'gt:0', 'max:999999999999'],
             'auto_extend' => ['boolean'],
 
             'down_minutes' => ["required_if:auction_type,{$down}", 'nullable', 'integer', 'min:1', 'max:1440'],
@@ -94,6 +96,6 @@ class StoreListingRequest extends FormRequest
      */
     public function attributes(): array
     {
-        return ['down_minutes' => 'chu kỳ giảm giá'];
+        return ['down_minutes' => 'chu kỳ giảm giá', 'bid_step' => 'bước giá'];
     }
 }

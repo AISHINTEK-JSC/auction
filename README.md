@@ -33,7 +33,7 @@ make dev                  # (tuỳ chọn) Vite dev server có HMR ở cổng 51
 
 Đổi cổng bằng `APP_PORT`, `VITE_PORT`, `MAILPIT_PORT`, `FORWARD_DB_PORT`.
 
-Service: `app` (php-fpm) · `nginx` · `scheduler` (chạy `auctions:sync` mỗi phút) · `mysql` · `mailpit` · `vite` (chỉ khi `make dev`).
+Service: `app` (php-fpm) · `nginx` · `scheduler` (chạy `auctions:sync` mỗi phút) · `queue` (gửi email trong hàng đợi) · `mysql` · `mailpit` · `vite` (chỉ khi `make dev`).
 
 ### Tài khoản seed (mật khẩu `password`)
 
@@ -110,10 +110,11 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 **Đấu giá**
 
 - Đặt giá, đặt nhanh, mua ngay; **huỷ lượt đặt** của mình khi phiên còn chạy.
+- **Bước giá** do người bán đặt cho đấu giá xuôi (tuỳ chọn). Engine không có khái niệm này nên app tự kiểm tra: giá gõ tay phải đạt "giá hiện tại + bước giá", nút đặt nhanh đặt đúng mức đó; lượt mở đầu được phép bằng giá khởi điểm. Tin không đặt bước giá thì chỉ cần cao hơn giá hiện tại.
 - **Theo dõi** phiên; trang "Phiên đấu giá của tôi" có các tab Đang bán, Đang tham gia (kèm đang dẫn đầu / bị vượt giá), Theo dõi, Đã thắng, Đã kết thúc, Chờ duyệt.
 - Khi phiên kết thúc, người bán và người thắng thấy **thông tin liên hệ** của nhau, **đánh giá** nhau (1–5 sao), và một trong hai có thể ghi nhận **người thắng từ bỏ**: engine chuyển kết quả cho người đặt giá cao kế tiếp, không còn ai thì huỷ phiên.
 
-**Thông báo** (chuông trên header + email): bị vượt giá, thắng / thua, phiên của mình có người thắng hoặc không, người thắng từ bỏ, tin được duyệt / từ chối / ẩn, trúng quà tặng. Email được gửi ngay trong request (không cần queue worker); khi chạy Docker xem ở Mailpit.
+**Thông báo** (chuông trên header + email): bị vượt giá, thắng / thua, phiên của mình có người thắng hoặc không, người thắng từ bỏ, tin được duyệt / từ chối / ẩn, trúng quà tặng. Email được gửi ngay trong request, trừ thông báo quà tặng mới gửi cho toàn bộ thành viên: loại này đi qua hàng đợi nên cần service `queue` (hoặc `php artisan queue:work` khi chạy trực tiếp). Khi chạy Docker xem email ở Mailpit.
 
 **Kiểm duyệt**
 
@@ -123,7 +124,7 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 
 **Quà tặng** (`/giveaways`)
 
-- Admin tạo chương trình (quà, số người trúng, hạn đăng ký) trong trang quản trị.
+- Admin tạo chương trình (quà, số người trúng, hạn đăng ký) trong trang quản trị. Ngay khi tạo, mọi thành viên đã xác thực và không bị khoá nhận thông báo "Quà tặng mới": bản trong app hiện ngay trên chuông, còn email đi qua hàng đợi.
 - Mỗi thành viên có một **mã số 6 chữ số cấp một lần khi đăng ký và không đổi**; bấm "Đăng ký tham gia" là vào danh sách, mỗi người một lượt cho mỗi chương trình.
 - "Quay thưởng" chọn ngẫu nhiên, chỉ quay một lần; tài khoản bị khoá không trúng. Người trúng được công bố bằng tên và mã số, và nhận thông báo.
 

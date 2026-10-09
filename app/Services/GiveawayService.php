@@ -5,14 +5,43 @@ namespace App\Services;
 use App\Models\Giveaway;
 use App\Models\GiveawayEntry;
 use App\Models\User;
+use App\Notifications\GiveawayAnnouncement;
 use App\Notifications\MarketplaceNotification;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 class GiveawayService
 {
     public function __construct(private readonly AuctionNotifier $notifier) {}
+
+    /**
+     * Tell every member who could join that the giveaway is open: verified,
+     * not blocked, and not the admin who just created it.
+     *
+     * @return int how many members were notified
+     */
+    public function announce(Giveaway $giveaway, ?User $except = null): int
+    {
+        if (! $giveaway->isOpen()) {
+            return 0;
+        }
+
+        $notified = 0;
+
+        User::query()
+            ->whereNull('blocked_at')
+            ->whereNotNull('email_verified_at')
+            ->when($except, fn ($query) => $query->whereKeyNot($except->id))
+            ->chunkById(500, function ($members) use ($giveaway, &$notified): void {
+                rescue(fn () => Notification::send($members, new GiveawayAnnouncement($giveaway)));
+
+                $notified += $members->count();
+            });
+
+        return $notified;
+    }
 
     /**
      * Sign a member up. Each member can enter a giveaway once; they take part

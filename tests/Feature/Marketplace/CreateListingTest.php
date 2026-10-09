@@ -111,6 +111,26 @@ class CreateListingTest extends TestCase
         $this->assertSame(120, Listing::query()->sole()->down_time);
     }
 
+    public function test_the_bid_step_is_kept_by_the_app_and_never_sent_to_the_engine(): void
+    {
+        Http::fake([
+            'engine.test/api/v1/auction' => Http::response($this->engineOk(['auction_id' => 44])),
+            'engine.test/api/v1/auction/44' => Http::response($this->engineOk($this->engineAuction(44))),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('listings.store'), $this->payload(['bid_step' => 50000]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(50000, Listing::query()->sole()->bid_step);
+        Http::assertSent(fn (Request $request) => $request->url() !== 'http://engine.test/api/v1/auction'
+            || ! array_key_exists('bid_step', $request->data()));
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('listings.store'), $this->payload(['bid_step' => 0]))
+            ->assertSessionHasErrors('bid_step');
+    }
+
     public function test_nothing_is_kept_when_the_engine_refuses_the_auction(): void
     {
         Http::fake(['engine.test/api/v1/auction' => Http::response($this->engineError('E_103'))]);

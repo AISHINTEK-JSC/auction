@@ -98,6 +98,8 @@ export type ListingDetail = ListingCard & {
     auction_type_label: string;
     start_price: number;
     min_bid_price: number | null;
+    /** Seller's minimum raise for ascending auctions; null when none was set. */
+    bid_step: number | null;
     auto_extend: boolean;
     down_time: number | null;
     down_price: number | null;
