@@ -4,6 +4,7 @@ namespace App\Http\Requests\Listings;
 
 use App\Enums\ItemCondition;
 use App\Models\Listing;
+use App\Support\Brand;
 use App\Support\ImageOptimizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -38,6 +39,7 @@ class UpdateListingRequest extends FormRequest
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'city_id' => ['required', 'integer', Rule::exists('cities', 'id')],
             'condition' => ['required', Rule::enum(ItemCondition::class)],
+            'brand' => ['nullable', 'string', 'max:'.Brand::MAX_LENGTH],
             'tags' => ['nullable', 'array', 'max:5'],
             'tags.*' => ['string', 'max:30'],
             'images' => ['nullable', 'array', 'max:'.self::MAX_IMAGES],

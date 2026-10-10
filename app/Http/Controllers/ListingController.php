@@ -21,6 +21,7 @@ use App\Services\ListingImages;
 use App\Services\ListingSyncService;
 use App\Services\SavedSearchMatcher;
 use App\Support\BidPresenter;
+use App\Support\Brand;
 use App\Support\HtmlCleaner;
 use App\Support\ListingForm;
 use App\Support\ListingPresenter;
@@ -185,6 +186,7 @@ class ListingController extends Controller
                 'category_id' => $data['category_id'],
                 'city_id' => $data['city_id'],
                 'condition' => $data['condition'],
+                'brand' => Brand::normalize($data['brand'] ?? null),
             ]);
 
             // A rejected listing goes back to the moderators once its seller has fixed it.
@@ -316,7 +318,10 @@ class ListingController extends Controller
             ->with(['images', 'city', 'winner'])
             ->when($category, fn (Builder $q) => $q->whereIn('category_id', $category->selfAndChildIds()))
             ->when($tag, fn (Builder $q) => $q->whereRelation('tags', 'tags.id', $tag->id))
-            ->when($filters['q'] ?? null, fn (Builder $q, string $term) => $q->whereLike('title', '%'.addcslashes($term, '%_\\').'%'))
+            // The word may be in the title or be the brand.
+            ->when($filters['q'] ?? null, fn (Builder $q, string $term) => $q->where(fn (Builder $either) => $either
+                ->whereLike('title', $pattern = '%'.addcslashes($term, '%_\\').'%')
+                ->orWhereLike('brand', $pattern)))
             ->when($filters['city_id'] ?? null, fn (Builder $q, int|string $cityId) => $q->where('city_id', $cityId))
             ->when($filters['type'] ?? null, fn (Builder $q, int|string $type) => (int) $type === self::TYPE_FIXED
                 ? $q->where('sale_type', SaleType::Fixed)

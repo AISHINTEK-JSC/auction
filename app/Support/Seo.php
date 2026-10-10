@@ -79,6 +79,7 @@ class Seo
                 'description' => Str::limit($summary !== '' ? $summary : $lead, 500),
                 'image' => $listing->images->map(fn ($image) => $image->url)->all() ?: null,
                 'category' => $listing->category?->name,
+                'brand' => $listing->brand === null ? null : ['@type' => 'Brand', 'name' => $listing->brand],
                 // No offer without a stated price ("giá thoả thuận").
                 'offers' => $listing->is_negotiable ? null : [
                     '@type' => 'Offer',

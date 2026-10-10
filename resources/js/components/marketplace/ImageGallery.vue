@@ -117,7 +117,7 @@ const zoomArrowClass =
             >
                 <div
                     ref="strip"
-                    class="relative flex [scrollbar-width:none] gap-2 overflow-auto sm:absolute sm:inset-0 sm:flex-col [&::-webkit-scrollbar]:hidden"
+                    class="relative flex scrollbar-none gap-2 overflow-auto sm:absolute sm:inset-0 sm:flex-col [&::-webkit-scrollbar]:hidden"
                 >
                     <button
                         v-for="(image, index) in images"
@@ -151,7 +151,7 @@ const zoomArrowClass =
             >
                 <div
                     ref="track"
-                    class="flex aspect-[4/3] snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                    class="flex aspect-4/3 snap-x snap-mandatory scrollbar-none overflow-x-auto [&::-webkit-scrollbar]:hidden"
                     tabindex="0"
                     @scroll.passive="onScroll"
                     @keydown.left.prevent="goTo(active - 1)"

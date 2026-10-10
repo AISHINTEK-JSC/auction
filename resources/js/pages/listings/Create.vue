@@ -45,6 +45,8 @@ type Draft = Source & {
 
 const props = defineProps<{
     conditions: { value: string; label: string }[];
+    /** Brands already used on the site, suggested while typing. */
+    brands: string[];
     /** How long a fixed-price listing stays up. */
     fixedListingDays: number;
     source: Source | null;
@@ -62,6 +64,7 @@ const form = useForm({
     category_id: source?.category_id ?? null,
     city_id: source?.city_id ?? null,
     condition: source?.condition ?? 'used',
+    brand: source?.brand ?? '',
     images: [] as File[],
     // Only a draft's stored images can be dropped or reordered here.
     remove_images: [] as number[],
@@ -294,6 +297,7 @@ async function deleteDraft() {
             :form="form"
             :errors="form.errors"
             :conditions="conditions"
+            :brands="brands"
             :existing-images="source?.images"
             :removable="!!draft"
         />
@@ -551,8 +555,9 @@ async function deleteDraft() {
                                     v-model="form.min_bid_price"
                                 />
                                 <p class="text-xs text-muted-foreground">
-                                    Giá thấp nhất bạn chịu bán. Người mua không
-                                    thấy.
+                                    Giá thấp nhất bạn chịu bán. Người mua biết
+                                    phiên có giá sàn nhưng không thấy mức này;
+                                    lượt đặt dưới giá sàn không được nhận.
                                 </p>
                                 <InputError
                                     :message="form.errors.min_bid_price"

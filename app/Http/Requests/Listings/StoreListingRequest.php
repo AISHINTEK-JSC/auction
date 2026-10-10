@@ -7,6 +7,7 @@ use App\Enums\ItemCondition;
 use App\Enums\SaleType;
 use App\Models\Listing;
 use App\Rules\PassesCaptcha;
+use App\Support\Brand;
 use App\Support\ImageOptimizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -64,6 +65,7 @@ class StoreListingRequest extends FormRequest
             'category_id' => ['required', 'integer', Rule::exists('categories', 'id')],
             'city_id' => ['required', 'integer', Rule::exists('cities', 'id')],
             'condition' => ['required', Rule::enum(ItemCondition::class)],
+            'brand' => ['nullable', 'string', 'max:'.Brand::MAX_LENGTH],
             'images' => [$reused > 0 ? 'nullable' : 'required', 'array', 'max:'.max(0, 8 - $reused)],
             'images.*' => ImageOptimizer::rules(5120),
             'tags' => ['nullable', 'array', 'max:5'],

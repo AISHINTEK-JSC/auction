@@ -48,6 +48,12 @@ const step = computed(() => {
     return digits >= 5 ? 100 : digits === 4 ? 10 : 1;
 });
 
+// The seller's floor price has not been reached. The engine records no bid
+// below it, so until someone has bid, nobody has reached it.
+const reserveUnmet = computed(
+    () => !isDown.value && props.listing.has_reserve && !hasBids.value,
+);
+
 // Lowest price the server accepts when the seller set a step (ListingBidController).
 const minimum = computed(
     () => props.auction.current_price + (hasBids.value ? step.value : 0),
@@ -56,6 +62,10 @@ const minimum = computed(
 const hint = computed(() => {
     if (isDown.value) {
         return `Giá chờ phải thấp hơn hoặc bằng ${formatVnd(props.auction.current_price)} và chia hết cho ${formatVnd(props.listing.down_price)}.`;
+    }
+
+    if (reserveUnmet.value) {
+        return `Người bán có đặt giá sàn và không công khai mức này. Lượt đặt chỉ được nhận khi đạt giá sàn; hãy nhập từ ${formatVnd(props.auction.current_price)} trở lên.`;
     }
 
     if (props.listing.bid_step && hasBids.value) {
@@ -122,11 +132,12 @@ function submit(type: number) {
             <InputError :message="form.errors.bid_price" />
         </div>
 
-        <!-- Without a seller's step, the engine places an opening quick bid at the
-             hidden reserve price, so the buyer could not know the amount: no
-             quick bid until someone has bid. With a step the app sets the price. -->
+        <!-- No quick bid on the opening bid unless the app can name its price:
+             with a seller's step it is the start price. Without one the engine
+             picks the amount, and while a floor price is unmet no amount the
+             bidder can be shown would be accepted. -->
         <Button
-            v-if="isDown || hasBids || listing.bid_step"
+            v-if="isDown || hasBids || (listing.bid_step && !reserveUnmet)"
             type="button"
             variant="outline"
             class="w-full"

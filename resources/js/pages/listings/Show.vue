@@ -25,6 +25,7 @@ import { getInitials } from '@/composables/useInitials';
 import { confirm } from '@/composables/useConfirm';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { show as categoryShow } from '@/routes/categories';
+import { index as searchIndex } from '@/routes/listings';
 import {
     destroy as cancelBidRoute,
     index as bidsIndex,
@@ -151,6 +152,20 @@ async function cancelBid(bid: Bid) {
                     <div>
                         <dt class="text-muted-foreground">Tình trạng</dt>
                         <dd>{{ listing.condition }}</dd>
+                    </div>
+                    <div v-if="listing.brand">
+                        <dt class="text-muted-foreground">Thương hiệu</dt>
+                        <dd>
+                            <Link
+                                :href="
+                                    searchIndex({
+                                        query: { q: listing.brand },
+                                    })
+                                "
+                                class="underline underline-offset-4"
+                                >{{ listing.brand }}</Link
+                            >
+                        </dd>
                     </div>
                     <div v-if="listing.category">
                         <dt class="text-muted-foreground">Danh mục</dt>

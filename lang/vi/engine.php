@@ -28,6 +28,6 @@ return [
     'E_117' => 'Giá khởi điểm, giá kết thúc và bước giảm không hợp lệ.',
     'E_118' => 'Phiên đấu giá sẽ bắt đầu lúc :0 giờ :1 phút.',
     'E_119' => 'Phiên đấu giá đã kết thúc.',
-    'E_120' => 'Giá đặt chưa đạt giá sàn của người bán.',
+    'E_120' => 'Giá đặt chưa đạt giá sàn của người bán. Hãy thử một mức giá cao hơn.',
     'E_121' => 'Đã có người đặt mức giá này trước bạn. Hãy đặt giá cao hơn.',
 ];

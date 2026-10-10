@@ -10,6 +10,7 @@ use App\Enums\SaleType;
 use App\Models\Listing;
 use App\Models\User;
 use App\Services\ListingImages;
+use App\Support\Brand;
 use App\Support\HtmlCleaner;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -43,6 +44,7 @@ class SaveDraft
             'category_id' => $data['category_id'] ?? null,
             'city_id' => $data['city_id'] ?? null,
             'condition' => ItemCondition::tryFrom((string) ($data['condition'] ?? '')) ?? ItemCondition::Used,
+            'brand' => Brand::normalize($data['brand'] ?? null),
             'moderation_status' => ModerationStatus::Draft,
             'sale_type' => $saleType,
             'is_negotiable' => $saleType === SaleType::Fixed && ($data['is_negotiable'] ?? false),

@@ -66,6 +66,16 @@ class ListingBidController extends Controller
         $previousLeader = $listing->leader_id;
         $error = null;
 
+        // The seller's floor price is not shown to bidders, and until it is met the
+        // engine places a quick bid straight at it: nobody should be committed to an
+        // amount they have not seen. A typed bid goes through; the engine answers
+        // E_120 while it is below the floor.
+        if ($type === BidType::Market && $this->reserveUnmet($listing, $sync)) {
+            throw ValidationException::withMessages([
+                'bid_price' => 'Phiên này có giá sàn. Hãy nhập số tiền bạn muốn đặt; lượt đặt được nhận khi đạt giá sàn của người bán.',
+            ]);
+        }
+
         if ($listing->auction_type === AuctionType::Up && $listing->bid_step !== null) {
             [$type, $price] = $this->applyBidStep($listing, $type, $price, $sync);
         }
@@ -97,6 +107,17 @@ class ListingBidController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Đặt giá thành công.']);
 
         return back();
+    }
+
+    /**
+     * An ascending auction with a floor price that no bid has reached yet. The
+     * engine records no bid below the floor, so "no leader" means "not reached".
+     */
+    private function reserveUnmet(Listing $listing, ListingSyncService $sync): bool
+    {
+        return $listing->auction_type === AuctionType::Up
+            && $listing->min_bid_price !== null
+            && $sync->liveState($listing)['highest_bidder_id'] === null;
     }
 
     /**

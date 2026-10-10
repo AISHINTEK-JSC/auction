@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AuctionEngine\AuctionEngineClient;
 use App\Services\AuctionEngine\EngineException;
 use App\Services\ListingImages;
+use App\Support\Brand;
 use App\Support\HtmlCleaner;
 use App\Support\MarketplaceSettings;
 use Carbon\CarbonInterface;
@@ -66,6 +67,7 @@ class CreateListing
             'title' => $data['title'],
             'description' => HtmlCleaner::clean($data['description'] ?? null),
             'condition' => $data['condition'],
+            'brand' => Brand::normalize($data['brand'] ?? null),
             'moderation_status' => $needsApproval ? ModerationStatus::Pending : ModerationStatus::Approved,
             'sale_type' => $saleType,
             'auction_type' => $type,

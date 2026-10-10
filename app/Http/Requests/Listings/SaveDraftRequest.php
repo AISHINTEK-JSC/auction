@@ -6,6 +6,7 @@ use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
 use App\Enums\SaleType;
 use App\Models\Listing;
+use App\Support\Brand;
 use App\Support\ImageOptimizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,6 +41,7 @@ class SaveDraftRequest extends FormRequest
             'category_id' => ['nullable', 'integer', Rule::exists('categories', 'id')],
             'city_id' => ['nullable', 'integer', Rule::exists('cities', 'id')],
             'condition' => ['nullable', Rule::enum(ItemCondition::class)],
+            'brand' => ['nullable', 'string', 'max:'.Brand::MAX_LENGTH],
             'tags' => ['nullable', 'array', 'max:5'],
             'tags.*' => ['string', 'max:30'],
             'images' => ['nullable', 'array', 'max:'.self::MAX_IMAGES],

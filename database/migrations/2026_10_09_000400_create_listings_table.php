@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('title');
             $table->longText('description')->nullable();
             $table->string('condition', 20);
+            // Optional, free text ("Apple", "Seiko"); tidied by App\Support\Brand.
+            $table->string('brand', 60)->nullable();
             // 'auction' or 'fixed'. A fixed-price listing has no auction at all.
             $table->string('sale_type', 10)->default('auction')->index();
             // draft, pending, approved, rejected or hidden (App\Enums\ModerationStatus).

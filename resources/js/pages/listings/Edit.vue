@@ -9,6 +9,7 @@ import type { EditableListing } from '@/types';
 
 const props = defineProps<{
     conditions: { value: string; label: string }[];
+    brands: string[];
     listing: EditableListing & { has_auction: boolean };
 }>();
 
@@ -20,6 +21,7 @@ const form = useForm({
     category_id: props.listing.category_id,
     city_id: props.listing.city_id,
     condition: props.listing.condition,
+    brand: props.listing.brand,
     images: [] as File[],
     tags: [...props.listing.tags],
     remove_images: [] as number[],
@@ -49,6 +51,7 @@ function submit() {
             :form="form"
             :errors="form.errors"
             :conditions="conditions"
+            :brands="brands"
             :existing-images="listing.images"
             removable
         />

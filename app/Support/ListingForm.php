@@ -11,7 +11,7 @@ use App\Models\Listing;
 class ListingForm
 {
     /**
-     * @return array{conditions: list<array{value: string, label: string}>}
+     * @return array{conditions: list<array{value: string, label: string}>, brands: list<string>}
      */
     public static function options(): array
     {
@@ -20,6 +20,8 @@ class ListingForm
                 fn (ItemCondition $condition) => ['value' => $condition->value, 'label' => $condition->label()],
                 ItemCondition::cases(),
             ),
+            // Suggested while typing the (optional) brand.
+            'brands' => Brand::suggestions(),
         ];
     }
 
@@ -47,6 +49,7 @@ class ListingForm
             'category_id' => $listing->category_id,
             'city_id' => $listing->city_id,
             'condition' => $listing->condition->value,
+            'brand' => $listing->brand ?? '',
             'tags' => $listing->tags->pluck('name')->all(),
             // The form shows them as small squares: the thumbnail will do.
             'images' => $listing->images->map(fn ($image) => ['id' => $image->id, 'url' => $image->thumb_url])->all(),

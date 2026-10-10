@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $title
  * @property string|null $description
  * @property ItemCondition $condition
+ * @property string|null $brand
  * @property SaleType $sale_type
  * @property ModerationStatus $moderation_status
  * @property string|null $moderation_note
@@ -59,7 +60,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $created_at
  */
 #[Fillable([
-    'user_id', 'category_id', 'city_id', 'title', 'description', 'condition', 'sale_type',
+    'user_id', 'category_id', 'city_id', 'title', 'description', 'condition', 'brand', 'sale_type',
     'moderation_status', 'moderation_note', 'relisted_from_id', 'leader_id', 'closed_notified_at',
     'auction_id', 'auction_type', 'start_price', 'is_negotiable', 'min_bid_price', 'bid_step', 'start_time', 'end_time',
     'auto_extend', 'down_time', 'down_price', 'finish_price',

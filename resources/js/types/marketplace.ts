@@ -105,6 +105,7 @@ export type ReviewItem = {
 export type ListingDetail = ListingCard & {
     description: string | null;
     condition: string;
+    brand: string | null;
     /** Each photo in two sizes: `url` for the page and the zoom, `thumb` for the strip below. */
     images: { url: string; thumb: string }[];
     category: { name: string; slug: string } | null;
@@ -112,6 +113,8 @@ export type ListingDetail = ListingCard & {
     auction_type_label: string;
     start_price: number;
     min_bid_price: number | null;
+    /** The seller set a floor price. Its amount is not disclosed to bidders. */
+    has_reserve: boolean;
     /** Seller's minimum raise for ascending auctions; null when none was set. */
     bid_step: number | null;
     auto_extend: boolean;
@@ -191,6 +194,8 @@ export type ProductFormFields = {
     category_id: number | null;
     city_id: number | null;
     condition: string;
+    /** Optional; empty when the seller names none. */
+    brand: string;
     images: File[];
     tags: string[];
 };

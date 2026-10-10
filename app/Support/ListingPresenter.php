@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\AuctionStatus;
+use App\Enums\AuctionType;
 use App\Models\Listing;
 use App\Models\Review;
 use App\Models\User;
@@ -58,6 +59,7 @@ class ListingPresenter
             ...self::card($listing),
             'description' => $listing->description,
             'condition' => $listing->condition->label(),
+            'brand' => $listing->brand,
             'images' => $listing->images->map(fn ($image) => ['url' => $image->url, 'thumb' => $image->thumb_url])->all(),
             'category' => $listing->category
                 ? ['name' => $listing->category->name, 'slug' => $listing->category->slug]
@@ -66,7 +68,10 @@ class ListingPresenter
             'auction_type_label' => $listing->auction_type?->label() ?? $listing->sale_type->label(),
             'start_price' => $listing->start_price,
             // The reserve price is the seller's secret.
+            // The amount is the seller's secret; that there is a floor is not, or
+            // bidders could not make sense of a bid being turned away.
             'min_bid_price' => $isOwner ? $listing->min_bid_price : null,
+            'has_reserve' => $listing->auction_type === AuctionType::Up && $listing->min_bid_price !== null,
             'bid_step' => $listing->bid_step,
             'auto_extend' => $listing->auto_extend,
             'down_time' => $listing->down_time,

@@ -25,6 +25,8 @@ const props = defineProps<{
     form: ProductFormFields;
     errors: Partial<Record<string, string>>;
     conditions: { value: string; label: string }[];
+    /** Brands already used on the site, suggested while typing. */
+    brands: string[];
     /** Images the listing already has. */
     existingImages?: { id: number; url: string }[];
     /** Whether stored images can be dropped. Not when relisting: they are copied as they are. */
@@ -137,7 +139,7 @@ const imageError = computed(
             <InputError :message="errors.title" />
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2">
             <div class="grid content-start gap-2">
                 <Label for="category_id">Danh mục</Label>
                 <CategorySelect
@@ -168,6 +170,31 @@ const imageError = computed(
                     placeholder="Chọn tình trạng"
                 />
                 <InputError :message="errors.condition" />
+            </div>
+
+            <div class="grid content-start gap-2">
+                <Label for="brand">
+                    Thương hiệu
+                    <span class="font-normal text-muted-foreground"
+                        >(tuỳ chọn)</span
+                    >
+                </Label>
+                <Input
+                    id="brand"
+                    v-model="form.brand"
+                    maxlength="60"
+                    list="brand-suggestions"
+                    autocomplete="off"
+                    placeholder="Ví dụ: Apple, Sony, Seiko"
+                />
+                <datalist id="brand-suggestions">
+                    <option
+                        v-for="brand in brands"
+                        :key="brand"
+                        :value="brand"
+                    />
+                </datalist>
+                <InputError :message="errors.brand" />
             </div>
         </div>
 

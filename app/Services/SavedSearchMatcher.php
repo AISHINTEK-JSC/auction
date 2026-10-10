@@ -31,7 +31,8 @@ class SavedSearchMatcher
         $type = $listing->sale_type === SaleType::Fixed ? self::TYPE_FIXED : $listing->auction_type?->value;
         // A search saved on a parent category also covers its sub-categories.
         $categories = array_filter([$listing->category_id, $listing->category?->parent_id]);
-        $title = self::fold($listing->title);
+        // What a keyword is looked for in: as in the search page, the title and the brand.
+        $title = self::fold($listing->title.' '.$listing->brand);
 
         $notified = [];
 
