@@ -8,7 +8,9 @@
         .mk-settings__row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.625rem 1rem; font-size: 0.875rem; }
         .mk-settings__row + .mk-settings__row { border-top: 1px solid rgb(128 128 128 / 0.15); }
         .mk-settings dt { opacity: 0.75; }
-        .mk-settings dd { margin: 0; font-weight: 600; text-align: right; white-space: nowrap; }
+        .mk-settings dt { flex-shrink: 0; }
+        /* Addresses and server names can be long: let them wrap instead of pushing the card wider. */
+        .mk-settings dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
     </style>
 
     <div class="mk-settings">

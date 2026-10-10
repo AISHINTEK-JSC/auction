@@ -115,7 +115,7 @@ class AuctionLifecycleTest extends TestCase
         $user->notify(MarketplaceNotification::outbid($listing));
 
         Notification::assertSentTo($user, MarketplaceNotification::class, fn ($notification, array $channels) => $channels === ['database', 'mail']
-            && str_contains($notification->toMail($user)->render()->toHtml(), $listing->title));
+            && str_contains((string) $notification->toMail($user)->render(), $listing->title));
     }
 
     public function test_opening_a_notification_marks_it_read_and_redirects(): void

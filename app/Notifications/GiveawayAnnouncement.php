@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Giveaway;
+use App\Support\EmailTemplate;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -17,11 +18,13 @@ class GiveawayAnnouncement extends MarketplaceNotification implements ShouldQueu
 
     public function __construct(Giveaway $giveaway)
     {
-        parent::__construct('giveaway_new', 'Quà tặng mới: '.$giveaway->title, sprintf(
-            'Quà: %s. Đăng ký tham gia miễn phí bằng mã số thành viên của bạn trước %s.',
-            $giveaway->prize,
-            $giveaway->ends_at->format('H:i d/m/Y'),
-        ), route('giveaways.show', $giveaway, absolute: false));
+        $text = EmailTemplate::render('giveaway_new', [
+            'chuong_trinh' => $giveaway->title,
+            'qua' => $giveaway->prize,
+            'han_dang_ky' => $giveaway->ends_at->format('H:i d/m/Y'),
+        ]);
+
+        parent::__construct('giveaway_new', $text['subject'], $text['body'], route('giveaways.show', $giveaway, absolute: false), 'giveaway_new');
     }
 
     /**

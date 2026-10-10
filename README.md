@@ -183,6 +183,26 @@ resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, Commen
 
 Người dùng bị khoá sẽ bị đăng xuất ở request kế tiếp và được chuyển tới `/blocked` để gửi yêu cầu mở khoá.
 
+### Cấu hình SMTP và auction engine trong trang quản trị
+
+Trang **Cài đặt** của admin có hai nút "Email (SMTP)" và "Auction engine". Những gì lưu ở đó nằm trong bảng `settings` và được đặt đè lên cấu hình lúc ứng dụng khởi động (`App\Support\IntegrationSettings::apply()`, gọi từ `AppServiceProvider`), nên phần còn lại của mã vẫn đọc `config('mail…')` và `config('services.auction_engine…')` như cũ.
+
+- Ô để trống thì dùng giá trị trong `.env`; công tắc "dùng lại .env" xoá toàn bộ phần đã lưu của nhóm đó.
+- Mật khẩu SMTP, API token và push key được mã hoá bằng `APP_KEY` trước khi lưu, không bao giờ gửi lại ra trình duyệt (để trống ô là giữ nguyên) và không xuất hiện trong nhật ký thao tác. Đổi `APP_KEY` thì các giá trị này coi như chưa đặt và phải nhập lại.
+- Khi có máy chủ SMTP lưu ở đây, app gửi thư qua SMTP dù `MAIL_MAILER` trong `.env` là gì.
+- "Kiểm tra kết nối" có hai mục: **Gửi email thử** (gửi một thư qua cấu hình đang dùng, báo lỗi của máy chủ nếu thất bại) và **Kiểm tra engine** (gọi engine lấy danh sách phiên để xác nhận địa chỉ và token).
+- Tiến trình `queue` và `scheduler` trong Docker khởi động lại ứng dụng cho mỗi lượt chạy nên nhận cấu hình mới ngay. Nếu chạy `queue:work` thường trực thì cần `php artisan queue:restart` sau khi đổi.
+
+### Mẫu email
+
+Trang **Mẫu email** của admin (`/admin/email-templates`) chỉnh hai lớp, cả hai nằm trong `App\Support\EmailTemplate` và lưu ở bảng `settings`:
+
+- **Giao diện chung** của mọi email: hiện/ẩn logo, màu chủ đạo, lời chào, chữ ký, chân thư. Khung thư là `resources/views/emails/message.blade.php` (kèm bản chữ thuần `message-text.blade.php`); muốn đổi bố cục thì sửa hai tệp này.
+- **Nội dung từng loại thư** (tiêu đề, nội dung, nhãn nút) với các chỗ điền sẵn như `{tin}`, `{gia}`, `{site}`. Danh sách loại thư, nội dung mặc định và các chỗ điền sẵn khai báo ở `EmailTemplate::TYPES`; thêm loại mới thì khai báo ở đó rồi tạo thông báo bằng `MarketplaceNotification::of()`. Với các thông báo của sàn, tiêu đề và nội dung dùng chung cho email và chuông trên site; hai thư tài khoản (xác thực email, đặt lại mật khẩu) chỉ đi qua email.
+- Mỗi loại có **Xem trước** (dữ liệu mẫu) và **Gửi thử** tới một địa chỉ.
+- Nội dung luôn được in ra dạng chữ thường, không chạy HTML hay Markdown: tên tin, ghi chú kiểm duyệt là thứ người dùng gõ vào.
+- Logo trong thư là `public/apple-touch-icon.png` (PNG, vì nhiều chương trình thư không hiện SVG) và lấy địa chỉ theo `APP_URL`.
+
 ## Kiểm thử
 
 ```bash

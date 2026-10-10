@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Listing;
 use App\Models\SavedSearch;
+use App\Support\EmailTemplate;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -17,11 +18,12 @@ class SavedSearchMatch extends MarketplaceNotification implements ShouldQueue
 
     public function __construct(Listing $listing, SavedSearch $search)
     {
-        parent::__construct('saved_search', 'Có tin mới khớp tìm kiếm của bạn', sprintf(
-            '"%s" vừa được đăng, khớp với tìm kiếm đã lưu: %s.',
-            $listing->title,
-            $search->label(),
-        ), route('listings.show', $listing, absolute: false));
+        $text = EmailTemplate::render('saved_search', [
+            'tin' => $listing->title,
+            'tim_kiem' => $search->label(),
+        ]);
+
+        parent::__construct('saved_search', $text['subject'], $text['body'], route('listings.show', $listing, absolute: false), 'saved_search');
     }
 
     /**

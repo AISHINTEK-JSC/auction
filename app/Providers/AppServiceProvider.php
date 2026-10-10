@@ -3,7 +3,12 @@
 namespace App\Providers;
 
 use App\Models\Setting;
+use App\Models\User;
+use App\Support\EmailTemplate;
+use App\Support\IntegrationSettings;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +30,29 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // SMTP and auction engine settings saved in the admin panel take over from .env.
+        IntegrationSettings::apply();
+
+        $this->useSiteEmailTemplate();
+    }
+
+    /**
+     * The two emails the framework writes itself (confirm your address, reset
+     * your password) go out in the site's own layout and wording too.
+     */
+    protected function useSiteEmailTemplate(): void
+    {
+        VerifyEmail::toMailUsing(fn (User $notifiable, string $url) => EmailTemplate::compose(
+            'verify_email', [], $notifiable->name, $url,
+        ));
+
+        ResetPassword::toMailUsing(fn (User $notifiable, string $token) => EmailTemplate::compose(
+            'reset_password',
+            ['phut' => (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire')],
+            $notifiable->name,
+            url(route('password.reset', ['token' => $token, 'email' => $notifiable->getEmailForPasswordReset()], false)),
+        ));
     }
 
     /**

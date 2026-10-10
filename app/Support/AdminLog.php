@@ -44,6 +44,7 @@ class AdminLog
         'blocked_domain.updated' => 'Sửa tên miền bị chặn',
         'blocked_domain.deleted' => 'Bỏ chặn tên miền email',
         'settings.updated' => 'Đổi cài đặt',
+        'email_template.updated' => 'Sửa mẫu email',
         'settings.password_policy' => 'Đổi chính sách mật khẩu',
         'settings.listing_approval' => 'Bật / tắt duyệt tin',
     ];

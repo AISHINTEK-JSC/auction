@@ -45,6 +45,12 @@ class Setting extends Model
         Cache::forget("settings.{$key}");
     }
 
+    public static function forget(string $key): void
+    {
+        self::query()->whereKey($key)->delete();
+        Cache::forget("settings.{$key}");
+    }
+
     /**
      * @return array{min_length: int, mixed_case: bool, numbers: bool, symbols: bool}
      */
