@@ -48,7 +48,8 @@ class ListingForm
             'city_id' => $listing->city_id,
             'condition' => $listing->condition->value,
             'tags' => $listing->tags->pluck('name')->all(),
-            'images' => $listing->images->map(fn ($image) => ['id' => $image->id, 'url' => $image->url])->all(),
+            // The form shows them as small squares: the thumbnail will do.
+            'images' => $listing->images->map(fn ($image) => ['id' => $image->id, 'url' => $image->thumb_url])->all(),
         ];
     }
 

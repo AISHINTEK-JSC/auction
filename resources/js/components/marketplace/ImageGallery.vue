@@ -14,7 +14,8 @@ import {
  * thumbnails, and click a photo to see it nearly full screen.
  */
 const props = defineProps<{
-    images: string[];
+    /** `url` is the full picture; `thumb` a small version for the strip. */
+    images: { url: string; thumb: string }[];
     alt: string;
 }>();
 
@@ -91,14 +92,14 @@ const arrowClass =
             >
                 <button
                     v-for="(image, index) in images"
-                    :key="image"
+                    :key="image.url"
                     type="button"
                     class="size-full shrink-0 cursor-zoom-in snap-center"
                     :aria-label="`Phóng to ảnh ${index + 1} trên ${images.length}`"
                     @click="zoomed = true"
                 >
                     <img
-                        :src="image"
+                        :src="image.url"
                         :alt="`${alt} (ảnh ${index + 1})`"
                         :loading="index === 0 ? 'eager' : 'lazy'"
                         class="size-full object-contain"
@@ -136,7 +137,7 @@ const arrowClass =
         <div v-if="images.length > 1" class="flex flex-wrap gap-2">
             <button
                 v-for="(image, index) in images"
-                :key="image"
+                :key="image.url"
                 type="button"
                 class="size-16 overflow-hidden rounded-md border-2"
                 :class="
@@ -146,7 +147,12 @@ const arrowClass =
                 :aria-current="index === active"
                 @click="goTo(index)"
             >
-                <img :src="image" alt="" class="size-full object-cover" />
+                <img
+                    :src="image.thumb"
+                    alt=""
+                    loading="lazy"
+                    class="size-full object-cover"
+                />
             </button>
         </div>
 
@@ -167,7 +173,7 @@ const arrowClass =
                 </DialogDescription>
 
                 <img
-                    :src="images[active]"
+                    :src="images[active].url"
                     :alt="`${alt} (ảnh ${active + 1})`"
                     class="size-full object-contain"
                 />

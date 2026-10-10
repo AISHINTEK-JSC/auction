@@ -16,26 +16,10 @@ return new class extends Migration
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
         });
-
-        Schema::create('cities', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->unsignedInteger('priority')->default(0);
-            $table->timestamps();
-        });
-
-        Schema::create('tags', function (Blueprint $table) {
-            $table->id();
-            $table->string('name', 50);
-            $table->string('slug', 60)->unique();
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('tags');
-        Schema::dropIfExists('cities');
         Schema::dropIfExists('categories');
     }
 };

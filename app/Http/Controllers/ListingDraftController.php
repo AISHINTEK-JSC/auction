@@ -9,6 +9,7 @@ use App\Http\Requests\Listings\PublishDraftRequest;
 use App\Http\Requests\Listings\SaveDraftRequest;
 use App\Models\Listing;
 use App\Services\AuctionEngine\EngineException;
+use App\Services\ListingImages;
 use App\Services\ListingSyncService;
 use App\Services\SavedSearchMatcher;
 use App\Support\ListingForm;
@@ -133,7 +134,7 @@ class ListingDraftController extends Controller
     {
         Gate::authorize('manageDraft', $listing);
 
-        $paths = $listing->images()->pluck('path')->all();
+        $paths = ListingImages::files($listing->images);
         $listing->delete();
         Storage::disk('public')->delete($paths);
 

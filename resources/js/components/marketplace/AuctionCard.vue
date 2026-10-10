@@ -41,6 +41,7 @@ defineProps<{
                 :src="listing.image"
                 :alt="listing.title"
                 loading="lazy"
+                decoding="async"
                 class="size-full object-cover"
             />
             <div

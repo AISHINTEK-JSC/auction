@@ -22,7 +22,7 @@ class ListingPresenter
         return [
             'id' => $listing->id,
             'title' => $listing->title,
-            'image' => $listing->images->first()?->url,
+            'image' => $listing->images->first()?->thumb_url,
             'city' => $listing->city?->name,
             'sale_type' => $listing->sale_type->value,
             'auction_type' => $listing->auction_type?->value,
@@ -58,7 +58,7 @@ class ListingPresenter
             ...self::card($listing),
             'description' => $listing->description,
             'condition' => $listing->condition->label(),
-            'images' => $listing->images->map(fn ($image) => $image->url)->all(),
+            'images' => $listing->images->map(fn ($image) => ['url' => $image->url, 'thumb' => $image->thumb_url])->all(),
             'category' => $listing->category
                 ? ['name' => $listing->category->name, 'slug' => $listing->category->slug]
                 : null,

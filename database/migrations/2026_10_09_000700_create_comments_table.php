@@ -16,18 +16,10 @@ return new class extends Migration
             $table->text('body');
             $table->timestamps();
         });
-
-        Schema::create('comment_likes', function (Blueprint $table) {
-            $table->foreignId('comment_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->timestamp('created_at')->nullable();
-            $table->primary(['comment_id', 'user_id']);
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('comment_likes');
         Schema::dropIfExists('comments');
     }
 };

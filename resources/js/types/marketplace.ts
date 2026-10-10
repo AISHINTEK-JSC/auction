@@ -103,7 +103,8 @@ export type ReviewItem = {
 export type ListingDetail = ListingCard & {
     description: string | null;
     condition: string;
-    images: string[];
+    /** Each photo in two sizes: `url` for the page and the zoom, `thumb` for the strip below. */
+    images: { url: string; thumb: string }[];
     category: { name: string; slug: string } | null;
     tags: { name: string; slug: string }[];
     auction_type_label: string;

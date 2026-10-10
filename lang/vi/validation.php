@@ -21,6 +21,7 @@ return [
     'gte' => [
         'numeric' => ':attribute phải lớn hơn hoặc bằng :value.',
     ],
+    'dimensions' => ':attribute có kích thước quá lớn (mỗi chiều tối đa 8000 điểm ảnh).',
     'image' => ':attribute phải là hình ảnh.',
     'in' => ':attribute đã chọn không hợp lệ.',
     'integer' => ':attribute phải là số nguyên.',

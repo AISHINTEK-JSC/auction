@@ -8,11 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('listings', function (Blueprint $table) {
-            // Set when the seller has been told the listing is about to expire.
-            $table->dateTime('expiry_reminded_at')->nullable()->after('closed_notified_at');
-        });
-
         // A search a member wants to hear about: every criterion is optional,
         // a new listing matches when it meets all that are set.
         Schema::create('saved_searches', function (Blueprint $table) {
@@ -30,9 +25,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('saved_searches');
-
-        Schema::table('listings', function (Blueprint $table) {
-            $table->dropColumn('expiry_reminded_at');
-        });
     }
 };

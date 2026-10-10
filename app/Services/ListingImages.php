@@ -3,16 +3,22 @@
 namespace App\Services;
 
 use App\Models\Listing;
+use App\Models\ListingImage;
+use App\Support\ImageOptimizer;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Applies the seller's changes to the images of an existing listing: drop
- * some, reorder the rest, append new uploads.
+ * The photos of a listing: storing uploads (shrunk, with a thumbnail), and
+ * applying the seller's changes to an existing listing.
  */
 class ListingImages
 {
     /**
+     * Drop some images, reorder the rest, append new uploads.
+     *
      * Run inside the caller's transaction. Files are not deleted here: delete
      * "removed" once the transaction has committed, and "stored" if it failed.
      *
@@ -42,29 +48,107 @@ class ListingImages
         $stored = [];
 
         foreach ($uploads as $upload) {
-            $stored[] = $path = self::store($listing, $upload);
-            $listing->images()->create(['path' => $path, 'position' => ++$position]);
+            array_push($stored, ...self::add($listing, $upload, ++$position)->files());
         }
 
         return [
             'stored' => $stored,
-            'removed' => array_values($removed->map(fn ($image) => $image->path)->all()),
+            'removed' => self::files($removed),
         ];
     }
 
     /**
-     * Put an upload on the public disk, in the listing's folder.
+     * Store an upload as an image of the listing: a large version and a
+     * thumbnail, both re-encoded. A file that cannot be processed (no GD, a
+     * format it does not read) is kept as uploaded, without a thumbnail.
      *
      * @throws RuntimeException when the disk refuses the file
      */
-    public static function store(Listing $listing, UploadedFile $upload): string
+    public static function add(Listing $listing, UploadedFile $upload, int $position): ListingImage
     {
-        $path = $upload->store("listings/{$listing->id}", 'public');
+        $directory = "listings/{$listing->id}";
 
-        if ($path === false) {
+        try {
+            $versions = ImageOptimizer::listing($upload->getRealPath());
+        } catch (RuntimeException $e) {
+            report($e);
+
+            $path = $upload->store($directory, 'public');
+
+            if ($path === false) {
+                throw new RuntimeException('Không lưu được hình ảnh.');
+            }
+
+            return $listing->images()->create(['path' => $path, 'position' => $position]);
+        }
+
+        [$path, $thumbPath] = self::write($directory, $versions);
+
+        return $listing->images()->create(['path' => $path, 'thumb_path' => $thumbPath, 'position' => $position]);
+    }
+
+    /**
+     * Put both versions on the public disk under one random name.
+     *
+     * @param  array{large: string, thumb: string}  $versions
+     * @return array{string, string} the large path and the thumbnail path
+     *
+     * @throws RuntimeException when the disk refuses a file
+     */
+    public static function write(string $directory, array $versions): array
+    {
+        $name = Str::random(40);
+        $path = "{$directory}/{$name}.jpg";
+        $thumbPath = "{$directory}/{$name}_thumb.webp";
+        $disk = Storage::disk('public');
+
+        if (! $disk->put($path, $versions['large']) || ! $disk->put($thumbPath, $versions['thumb'])) {
+            $disk->delete([$path, $thumbPath]);
+
             throw new RuntimeException('Không lưu được hình ảnh.');
         }
 
-        return $path;
+        return [$path, $thumbPath];
+    }
+
+    /**
+     * Copy an image, files included, to another listing.
+     *
+     * @return ListingImage|null null when the source file is gone
+     */
+    public static function copy(ListingImage $image, Listing $listing, int $position): ?ListingImage
+    {
+        $disk = Storage::disk('public');
+        $path = "listings/{$listing->id}/".basename($image->path);
+
+        if (! $disk->copy($image->path, $path)) {
+            return null;
+        }
+
+        $thumbPath = $image->thumb_path === null ? null : "listings/{$listing->id}/".basename($image->thumb_path);
+
+        // A lost thumbnail is no reason to lose the image: it shows its large version.
+        if ($thumbPath !== null && ! $disk->copy($image->thumb_path, $thumbPath)) {
+            $thumbPath = null;
+        }
+
+        return $listing->images()->create(['path' => $path, 'thumb_path' => $thumbPath, 'position' => $position]);
+    }
+
+    /**
+     * Every file the given images own on the public disk.
+     *
+     * @param  iterable<ListingImage>  $images
+     * @return list<string>
+     */
+    public static function files(iterable $images): array
+    {
+        $files = [];
+
+        foreach ($images as $image) {
+            array_push($files, ...$image->files());
+        }
+
+        return $files;
     }
 }

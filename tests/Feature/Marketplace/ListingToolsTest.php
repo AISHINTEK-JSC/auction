@@ -133,7 +133,7 @@ class ListingToolsTest extends TestCase
         $this->assertSame($images->last()->id, $images->max('id'));
 
         $this->get(route('listings.show', $listing))
-            ->assertInertia(fn (Assert $page) => $page->where('listing.image', $c->url)->where('listing.images.0', $c->url));
+            ->assertInertia(fn (Assert $page) => $page->where('listing.image', $c->thumb_url)->where('listing.images.0.url', $c->url));
     }
 
     // ---- saved searches --------------------------------------------------

@@ -6,6 +6,7 @@ use App\Enums\AuctionType;
 use App\Enums\ItemCondition;
 use App\Enums\SaleType;
 use App\Models\Listing;
+use App\Support\ImageOptimizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
@@ -42,7 +43,7 @@ class SaveDraftRequest extends FormRequest
             'tags' => ['nullable', 'array', 'max:5'],
             'tags.*' => ['string', 'max:30'],
             'images' => ['nullable', 'array', 'max:'.self::MAX_IMAGES],
-            'images.*' => ['image', 'max:5120'],
+            'images.*' => ImageOptimizer::rules(5120),
             'remove_images' => ['nullable', 'array'],
             'remove_images.*' => ['integer'],
             'image_order' => ['nullable', 'array'],

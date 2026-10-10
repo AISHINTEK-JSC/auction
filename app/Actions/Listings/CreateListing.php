@@ -191,17 +191,16 @@ class CreateListing
         $position = 0;
 
         foreach ($source->images ?? [] as $image) {
-            $path = "listings/{$listing->id}/".basename($image->path);
+            $copy = ListingImages::copy($image, $listing, $position);
 
-            if (Storage::disk('public')->copy($image->path, $path)) {
-                $stored[] = $path;
-                $listing->images()->create(['path' => $path, 'position' => $position++]);
+            if ($copy !== null) {
+                array_push($stored, ...$copy->files());
+                $position++;
             }
         }
 
         foreach ($uploads as $upload) {
-            $stored[] = $path = ListingImages::store($listing, $upload);
-            $listing->images()->create(['path' => $path, 'position' => $position++]);
+            array_push($stored, ...ListingImages::add($listing, $upload, $position++)->files());
         }
 
         return $stored;
