@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useAuthUser } from '@/composables/useAuthUser';
 import { getInitials } from '@/composables/useInitials';
+import { confirm } from '@/composables/useConfirm';
 import { formatDateTime } from '@/lib/format';
 import { login } from '@/routes';
 import { destroy, like } from '@/routes/comments';
@@ -64,8 +65,16 @@ function toggleLike(comment: CommentItem) {
     );
 }
 
-function remove(comment: CommentItem) {
-    if (!window.confirm('Xoá bình luận này?')) {
+async function remove(comment: CommentItem) {
+    const confirmed = await confirm({
+        title: 'Xoá bình luận này?',
+        description:
+            'Bình luận và các câu trả lời bên dưới nó sẽ bị xoá hẳn, không khôi phục lại được.',
+        confirmLabel: 'Xoá bình luận',
+        destructive: true,
+    });
+
+    if (!confirmed) {
         return;
     }
 

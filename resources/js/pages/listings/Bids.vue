@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowLeft } from '@lucide/vue';
+import { confirm } from '@/composables/useConfirm';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { show } from '@/routes/listings';
 import { destroy } from '@/routes/listings/bids';
@@ -12,8 +13,15 @@ const props = defineProps<{
     bids: Bid[];
 }>();
 
-function cancel(bid: Bid) {
-    if (window.confirm(`Huỷ lượt đặt giá ${formatVnd(bid.price)} của bạn?`)) {
+async function cancel(bid: Bid) {
+    const confirmed = await confirm({
+        title: 'Huỷ lượt đặt giá này?',
+        description: `Lượt đặt giá ${formatVnd(bid.price)} của bạn sẽ bị huỷ và không còn được tính trong phiên.`,
+        confirmLabel: 'Huỷ lượt đặt giá',
+        destructive: true,
+    });
+
+    if (confirmed) {
         router.delete(destroy(props.listing.id).url, {
             data: { bid_price: bid.price },
             preserveScroll: true,

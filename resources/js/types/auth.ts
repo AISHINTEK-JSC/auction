@@ -5,6 +5,9 @@ export type User = {
     avatar?: string | null;
     phone: string | null;
     address: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    /** YYYY-MM-DD. */
+    birthday: string | null;
     role: 'user' | 'moderator' | 'admin';
     /** Permanent member number, used to join giveaways. */
     member_code: string | null;

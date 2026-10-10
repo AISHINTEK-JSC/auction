@@ -4,6 +4,7 @@ import { Mail, MapPin, Phone, RefreshCw } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { useAuthUser } from '@/composables/useAuthUser';
 import { login } from '@/routes';
+import { confirm } from '@/composables/useConfirm';
 import { formatDateTime } from '@/lib/format';
 import { destroy, renew as renewRoute, sold } from '@/routes/listings';
 import { send as resendVerification } from '@/routes/verification';
@@ -20,12 +21,15 @@ const props = defineProps<{
 
 const user = useAuthUser();
 
-function markSold() {
-    if (
-        window.confirm(
-            'Đánh dấu tin này là đã bán? Tin sẽ không còn nhận liên hệ.',
-        )
-    ) {
+async function markSold() {
+    const confirmed = await confirm({
+        title: 'Đánh dấu tin này là đã bán?',
+        description:
+            'Tin chuyển sang trạng thái đã bán và không còn nhận liên hệ từ người mua.',
+        confirmLabel: 'Đánh dấu đã bán',
+    });
+
+    if (confirmed) {
         router.post(sold(props.listing.id).url, {}, { preserveScroll: true });
     }
 }
@@ -34,8 +38,15 @@ function renew() {
     router.post(renewRoute(props.listing.id).url, {}, { preserveScroll: true });
 }
 
-function takeDown() {
-    if (window.confirm('Gỡ tin này khỏi sàn?')) {
+async function takeDown() {
+    const confirmed = await confirm({
+        title: 'Gỡ tin này khỏi sàn?',
+        description: 'Tin sẽ không còn hiển thị với người mua.',
+        confirmLabel: 'Gỡ tin',
+        destructive: true,
+    });
+
+    if (confirmed) {
         router.delete(destroy(props.listing.id).url, { preserveScroll: true });
     }
 }

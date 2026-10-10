@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Enums\Gender;
 use App\Enums\UserRole;
 use App\Filament\Concerns\AdminOnly;
 use App\Filament\Resources\Users\Pages\ManageUsers;
@@ -13,6 +14,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -54,6 +56,11 @@ class UserResource extends Resource
             TextInput::make('email')->email()->required()->unique(ignoreRecord: true),
             TextInput::make('phone')->label('Số điện thoại')->maxLength(20),
             TextInput::make('address')->label('Địa chỉ')->maxLength(255),
+            Select::make('gender')->label('Giới tính')
+                ->options(array_column(Gender::options(), 'label', 'value'))
+                ->placeholder('Chưa cho biết'),
+            DatePicker::make('birthday')->label('Ngày sinh')->native(false)->displayFormat('d/m/Y')
+                ->maxDate(now()->subDay())->minDate('1900-01-01'),
         ]);
     }
 

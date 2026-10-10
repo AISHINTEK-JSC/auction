@@ -3,6 +3,7 @@
 namespace Tests\Feature\Marketplace;
 
 use App\Enums\AuctionStatus;
+use App\Models\City;
 use App\Models\Listing;
 use App\Models\Review;
 use App\Models\User;
@@ -179,13 +180,21 @@ class AuctionLifecycleTest extends TestCase
             'engine.test/api/v1/auction/7/bids' => Http::response($this->engineOk([])),
         ]);
 
+        // Both have saved where they want deliveries; only the buyer's matters here.
+        $city = City::query()->create(['name' => 'Đà Nẵng']);
+        $winner->shippingAddress()->create(['recipient_name' => 'Chị Lan', 'phone' => '0933333333', 'city_id' => $city->id, 'address' => '12 Lê Lợi, Hải Châu']);
+        $seller->shippingAddress()->create(['recipient_name' => 'Anh Nam', 'phone' => '0944444444', 'city_id' => $city->id, 'address' => '5 Trần Phú']);
+
         $this->actingAs($seller)->get(route('listings.show', $listing))->assertInertia(fn (Assert $page) => $page
             ->where('listing.contact.phone', '0922222222')
             ->where('listing.contact.address', 'Huế')
+            ->where('listing.contact.shipping', ['name' => 'Chị Lan', 'phone' => '0933333333', 'address' => '12 Lê Lợi, Hải Châu, Đà Nẵng'])
             ->where('listing.can.settle', true));
 
+        // The winner sees how to reach the seller, not where the seller receives parcels.
         $this->actingAs($winner)->get(route('listings.show', $listing))->assertInertia(fn (Assert $page) => $page
             ->where('listing.contact.phone', '0911111111')
+            ->where('listing.contact.shipping', null)
             ->where('listing.is_winner', true));
 
         $this->actingAs(User::factory()->create())->get(route('listings.show', $listing))->assertInertia(fn (Assert $page) => $page

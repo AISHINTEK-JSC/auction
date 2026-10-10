@@ -117,16 +117,19 @@ class ListingPresenter
 
     /**
      * Who may see whose contact details:
-     * - after an auction, the seller and the winner see each other's;
+     * - after an auction, the seller and the winner see each other's, and the
+     *   seller also sees where the winner wants the item delivered;
      * - on a fixed-price listing that is for sale, signed-in members with a
      *   verified email see the seller's. Guests do not, to keep it from scrapers.
      *
-     * @return array{name: string, email: string, phone: string|null, address: string|null}|null
+     * @return array{name: string, email: string, phone: string|null, address: string|null, shipping: array{name: string, phone: string, address: string}|null}|null
      */
     private static function contactFor(Listing $listing, ?User $viewer, bool $settles): ?array
     {
         if ($settles) {
-            return self::contact($viewer?->id === $listing->user_id ? $listing->winner : $listing->user);
+            return $viewer?->id === $listing->user_id
+                ? self::contact($listing->winner, withShipping: true)
+                : self::contact($listing->user);
         }
 
         if ($listing->isFixedPrice()
@@ -141,15 +144,27 @@ class ListingPresenter
     }
 
     /**
-     * @return array{name: string, email: string, phone: string|null, address: string|null}|null
+     * @param  bool  $withShipping  include the delivery address: only for a seller looking at their buyer
+     * @return array{name: string, email: string, phone: string|null, address: string|null, shipping: array{name: string, phone: string, address: string}|null}|null
      */
-    public static function contact(?User $user): ?array
+    public static function contact(?User $user, bool $withShipping = false): ?array
     {
-        return $user === null ? null : [
+        if ($user === null) {
+            return null;
+        }
+
+        $shipping = $withShipping ? $user->shippingAddress : null;
+
+        return [
             'name' => $user->name,
             'email' => $user->email,
             'phone' => $user->phone,
             'address' => $user->address,
+            'shipping' => $shipping === null ? null : [
+                'name' => $shipping->recipient_name,
+                'phone' => $shipping->phone,
+                'address' => $shipping->oneLine(),
+            ],
         ];
     }
 

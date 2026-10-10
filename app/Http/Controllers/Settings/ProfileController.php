@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Enums\Gender;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
@@ -24,9 +25,18 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
+        $shipping = $request->user()->shippingAddress;
+
         return Inertia::render('settings/Profile', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
+            'genders' => Gender::options(),
+            'shippingAddress' => $shipping === null ? null : [
+                'name' => $shipping->recipient_name,
+                'phone' => $shipping->phone,
+                'city_id' => $shipping->city_id,
+                'address' => $shipping->address,
+            ],
         ]);
     }
 
@@ -35,13 +45,23 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $user->fill($request->profile());
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        $user->save();
+
+        // Only when the form carried the shipping address: emptied means removed.
+        if ($request->has('shipping_address')) {
+            $shipping = $request->shippingAddress();
+
+            $shipping === null
+                ? $user->shippingAddress()->delete()
+                : $user->shippingAddress()->updateOrCreate([], $shipping);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 

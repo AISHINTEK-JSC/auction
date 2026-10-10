@@ -22,6 +22,7 @@ import StarRating from '@/components/marketplace/StarRating.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getInitials } from '@/composables/useInitials';
+import { confirm } from '@/composables/useConfirm';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { show as categoryShow } from '@/routes/categories';
 import {
@@ -93,8 +94,15 @@ watch(
     { immediate: true },
 );
 
-function cancelBid(bid: Bid) {
-    if (window.confirm(`Huỷ lượt đặt giá ${formatVnd(bid.price)} của bạn?`)) {
+async function cancelBid(bid: Bid) {
+    const confirmed = await confirm({
+        title: 'Huỷ lượt đặt giá này?',
+        description: `Lượt đặt giá ${formatVnd(bid.price)} của bạn sẽ bị huỷ và không còn được tính trong phiên.`,
+        confirmLabel: 'Huỷ lượt đặt giá',
+        destructive: true,
+    });
+
+    if (confirmed) {
         router.delete(cancelBidRoute(props.listing.id).url, {
             data: { bid_price: bid.price },
             preserveScroll: true,
@@ -130,7 +138,8 @@ function cancelBid(bid: Bid) {
                 class="order-1 lg:order-none"
                 :images="listing.images"
                 :alt="listing.title"
-            />
+            >
+            </ImageGallery>
 
             <section
                 class="order-5 rounded-lg border bg-background p-4 lg:order-none"

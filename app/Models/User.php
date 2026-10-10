@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Gender;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -28,6 +30,9 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property string|null $phone
  * @property string|null $address
+ * @property Gender|null $gender
+ * @property Carbon|null $birthday
+ * @property-read ShippingAddress|null $shippingAddress
  * @property string|null $avatar_path
  * @property UserRole $role
  * @property string|null $member_code
@@ -44,7 +49,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password', 'phone', 'address', 'avatar_path'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'address', 'gender', 'birthday', 'avatar_path'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 #[Appends(['avatar'])]
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail, PasskeyUser
@@ -64,9 +69,22 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
+            'gender' => Gender::class,
+            // Sent to the page as a plain date, the format of a date input.
+            'birthday' => 'date:Y-m-d',
             'blocked_at' => 'datetime',
             'bid_banned_until' => 'datetime',
         ];
+    }
+
+    /**
+     * Where the member wants purchases delivered, if they have said.
+     *
+     * @return HasOne<ShippingAddress, $this>
+     */
+    public function shippingAddress(): HasOne
+    {
+        return $this->hasOne(ShippingAddress::class);
     }
 
     /**

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { User as UserIcon } from '@lucide/vue';
+import { computed, ref } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import CitySelect from '@/components/marketplace/CitySelect.vue';
+import SearchableSelect from '@/components/marketplace/SearchableSelect.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,8 +27,28 @@ defineOptions({
     },
 });
 
+const props = defineProps<{
+    mustVerifyEmail: boolean;
+    status?: string | null;
+    genders: { value: string; label: string }[];
+    shippingAddress: {
+        name: string;
+        phone: string;
+        city_id: number | null;
+        address: string;
+    } | null;
+}>();
+
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+// The two pickers are not form fields themselves: hidden inputs carry their values.
+const gender = ref<string | null>(user.value.gender);
+const shippingCityId = ref<number | null>(
+    props.shippingAddress?.city_id ?? null,
+);
+
+const today = new Date().toISOString().slice(0, 10);
 
 function uploadAvatar(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -142,7 +165,105 @@ function uploadAvatar(event: Event) {
                 <InputError class="mt-2" :message="errors.address" />
             </div>
 
-            <div v-if="page.props.mustVerifyEmail && !user.email_verified_at">
+            <div class="grid gap-6 sm:grid-cols-2">
+                <div class="grid content-start gap-2">
+                    <Label for="gender">Giới tính</Label>
+                    <SearchableSelect
+                        id="gender"
+                        v-model="gender"
+                        :options="genders"
+                        :icon="UserIcon"
+                        all-label="Không muốn cho biết"
+                    />
+                    <input type="hidden" name="gender" :value="gender ?? ''" />
+                    <InputError :message="errors.gender" />
+                </div>
+
+                <div class="grid content-start gap-2">
+                    <Label for="birthday">Ngày sinh</Label>
+                    <Input
+                        id="birthday"
+                        type="date"
+                        name="birthday"
+                        :default-value="user.birthday ?? ''"
+                        min="1900-01-01"
+                        :max="today"
+                        autocomplete="bday"
+                    />
+                    <InputError :message="errors.birthday" />
+                </div>
+            </div>
+            <p class="-mt-3 text-xs text-muted-foreground">
+                Giới tính và ngày sinh không hiển thị với thành viên khác.
+            </p>
+
+            <fieldset class="space-y-4 rounded-lg border p-4">
+                <legend class="px-1 text-sm font-medium">
+                    Địa chỉ nhận hàng
+                </legend>
+                <p class="text-xs text-muted-foreground">
+                    Chỉ người bán của phiên đấu giá bạn thắng mới thấy địa chỉ
+                    này. Để trống cả bốn ô nếu bạn chưa muốn lưu.
+                </p>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="grid content-start gap-2">
+                        <Label for="shipping_name">Người nhận</Label>
+                        <Input
+                            id="shipping_name"
+                            name="shipping_name"
+                            :default-value="shippingAddress?.name ?? ''"
+                            autocomplete="shipping name"
+                            placeholder="Họ tên người nhận"
+                        />
+                        <InputError :message="errors.shipping_name" />
+                    </div>
+
+                    <div class="grid content-start gap-2">
+                        <Label for="shipping_phone"
+                            >Số điện thoại nhận hàng</Label
+                        >
+                        <Input
+                            id="shipping_phone"
+                            type="tel"
+                            name="shipping_phone"
+                            :default-value="shippingAddress?.phone ?? ''"
+                            autocomplete="shipping tel"
+                            placeholder="09xxx"
+                        />
+                        <InputError :message="errors.shipping_phone" />
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="shipping_city_id">Tỉnh / thành phố</Label>
+                    <CitySelect
+                        id="shipping_city_id"
+                        v-model="shippingCityId"
+                        all-label="Chưa chọn"
+                    />
+                    <input
+                        type="hidden"
+                        name="shipping_city_id"
+                        :value="shippingCityId ?? ''"
+                    />
+                    <InputError :message="errors.shipping_city_id" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="shipping_address">Địa chỉ chi tiết</Label>
+                    <Input
+                        id="shipping_address"
+                        name="shipping_address"
+                        :default-value="shippingAddress?.address ?? ''"
+                        autocomplete="shipping street-address"
+                        placeholder="Số nhà, đường, phường / xã, quận / huyện"
+                    />
+                    <InputError :message="errors.shipping_address" />
+                </div>
+            </fieldset>
+
+            <div v-if="mustVerifyEmail && !user.email_verified_at">
                 <p class="-mt-4 text-sm text-muted-foreground">
                     Email của bạn chưa được xác thực.
                     <Link
@@ -155,7 +276,7 @@ function uploadAvatar(event: Event) {
                 </p>
 
                 <div
-                    v-if="page.props.status === 'verification-link-sent'"
+                    v-if="status === 'verification-link-sent'"
                     class="mt-2 text-sm font-medium text-green-600"
                 >
                     Đã gửi liên kết xác thực mới vào email của bạn.

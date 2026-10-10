@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
-import { Mail, MapPin, Phone } from '@lucide/vue';
+import { Mail, MapPin, Phone, Truck } from '@lucide/vue';
 import InputError from '@/components/InputError.vue';
 import StarRating from '@/components/marketplace/StarRating.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { confirm } from '@/composables/useConfirm';
 import { formatVnd } from '@/lib/format';
 import { withdrawWinner } from '@/routes/listings';
 import { store as review } from '@/routes/listings/reviews';
@@ -27,12 +28,26 @@ function submitReview() {
     form.post(review(props.listing.id).url, { preserveScroll: true });
 }
 
-function withdraw() {
-    const message = props.listing.is_winner
-        ? 'Bạn chắc chắn từ bỏ kết quả này? Người đặt giá cao kế tiếp sẽ trở thành người thắng và bạn không thể lấy lại.'
-        : 'Xác nhận người thắng không mua? Người đặt giá cao kế tiếp sẽ trở thành người thắng; nếu không còn ai, phiên sẽ bị huỷ.';
+async function withdraw() {
+    const confirmed = await confirm(
+        props.listing.is_winner
+            ? {
+                  title: 'Từ bỏ kết quả đấu giá này?',
+                  description:
+                      'Người đặt giá cao kế tiếp sẽ trở thành người thắng và bạn không thể lấy lại. Từ bỏ nhiều lần sẽ bị tạm khoá quyền đặt giá.',
+                  confirmLabel: 'Từ bỏ kết quả',
+                  destructive: true,
+              }
+            : {
+                  title: 'Xác nhận người thắng không mua?',
+                  description:
+                      'Người đặt giá cao kế tiếp sẽ trở thành người thắng; nếu không còn ai, phiên sẽ bị huỷ. Không hoàn tác được.',
+                  confirmLabel: 'Xác nhận không mua',
+                  destructive: true,
+              },
+    );
 
-    if (window.confirm(message)) {
+    if (confirmed) {
         router.post(
             withdrawWinner(props.listing.id).url,
             {},
@@ -95,6 +110,33 @@ function withdraw() {
                 <MapPin class="size-4 shrink-0 text-muted-foreground" />
                 {{ listing.contact.address }}
             </div>
+            <div
+                v-if="listing.contact.shipping"
+                class="rounded-md border bg-muted/40 p-3 sm:col-span-2"
+            >
+                <dt class="flex items-center gap-2 text-muted-foreground">
+                    <Truck class="size-4 shrink-0" />
+                    Địa chỉ nhận hàng
+                </dt>
+                <dd class="mt-1 space-y-0.5">
+                    <p class="font-medium">
+                        {{ listing.contact.shipping.name }} ·
+                        <a
+                            :href="`tel:${listing.contact.shipping.phone}`"
+                            class="underline underline-offset-4"
+                            >{{ listing.contact.shipping.phone }}</a
+                        >
+                    </p>
+                    <p>{{ listing.contact.shipping.address }}</p>
+                </dd>
+            </div>
+            <p
+                v-else-if="!listing.is_winner"
+                class="text-muted-foreground sm:col-span-2"
+            >
+                Người thắng chưa lưu địa chỉ nhận hàng. Hãy hỏi trực tiếp khi
+                liên hệ.
+            </p>
         </dl>
 
         <form class="space-y-2 border-t pt-4" @submit.prevent="submitReview">

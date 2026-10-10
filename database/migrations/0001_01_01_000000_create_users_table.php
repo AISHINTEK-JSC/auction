@@ -14,6 +14,9 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('phone', 20)->nullable();
             $table->string('address')->nullable();
+            // male, female or other (App\Enums\Gender).
+            $table->string('gender', 10)->nullable();
+            $table->date('birthday')->nullable();
             $table->string('avatar_path')->nullable();
             // user, moderator or admin (App\Enums\UserRole).
             $table->string('role', 20)->default('user')->index();

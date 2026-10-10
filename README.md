@@ -148,6 +148,8 @@ Trình duyệt ──Inertia──▶ auction-fe ──HTTP + Bearer token──
 
 **Captcha** (Cloudflare Turnstile) ở **đăng ký** và **đăng tin** (kể cả đăng một bản nháp; lưu nháp thì không hỏi). Tắt khi `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` để trống. Máy local dùng cặp khoá thử của Cloudflare (luôn qua, widget hiện dòng "chỉ để kiểm tra"); chạy thật cần tạo khoá riêng cho tên miền tại dash.cloudflare.com → Turnstile. Nếu không gọi được Cloudflare, yêu cầu bị từ chối chứ không cho qua.
 
+**Hồ sơ thành viên** (`/settings/profile`): họ tên, email, số điện thoại, địa chỉ, ảnh đại diện, **giới tính**, **ngày sinh** và một **địa chỉ nhận hàng** (người nhận, số điện thoại, tỉnh / thành, địa chỉ chi tiết; bảng `shipping_addresses`, hiện mỗi thành viên một địa chỉ). Giới tính và ngày sinh không hiển thị với ai khác. Địa chỉ nhận hàng chỉ hiện cho người bán của phiên mà thành viên đó thắng, trong khung thông tin liên hệ sau khi phiên kết thúc. Bốn ô của địa chỉ nhận hàng phải điền đủ hoặc để trống cả.
+
 **Vai trò**: Thành viên, Kiểm duyệt viên (tin đấu giá, báo cáo, bình luận, yêu cầu mở khoá), Quản trị viên (thêm thành viên, danh mục, chặn IP / email, quà tặng, cài đặt). Đổi vai trò ở trang Thành viên.
 
 ## Cấu trúc code

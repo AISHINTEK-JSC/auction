@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { Bell, BellRing, Flag, Pencil } from '@lucide/vue';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useAuthUser } from '@/composables/useAuthUser';
-import { login } from '@/routes';
-import { edit, watch } from '@/routes/listings';
+import { useWatchListing } from '@/composables/useWatchListing';
+import { edit } from '@/routes/listings';
 import { store as report } from '@/routes/listings/reports';
 import type { ListingDetail } from '@/types';
 
@@ -33,19 +33,7 @@ const form = useForm({
     note: '',
 });
 
-function toggleWatch() {
-    if (!user.value) {
-        router.visit(login());
-
-        return;
-    }
-
-    router.post(
-        watch(props.listing.id).url,
-        {},
-        { preserveScroll: true, only: ['listing'] },
-    );
-}
+const toggleWatch = useWatchListing(() => props.listing.id);
 
 function submitReport() {
     form.post(report(props.listing.id).url, {

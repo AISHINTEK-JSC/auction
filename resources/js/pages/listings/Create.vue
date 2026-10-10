@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { confirm } from '@/composables/useConfirm';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { store } from '@/routes/listings';
 import {
@@ -245,11 +246,20 @@ function saveDraft() {
     }
 }
 
-function deleteDraft() {
-    if (
-        draft &&
-        window.confirm('Xoá tin nháp này? Không khôi phục lại được.')
-    ) {
+async function deleteDraft() {
+    if (!draft) {
+        return;
+    }
+
+    const confirmed = await confirm({
+        title: 'Xoá tin nháp này?',
+        description:
+            'Nội dung và hình ảnh đã lưu của tin nháp sẽ bị xoá hẳn, không khôi phục lại được.',
+        confirmLabel: 'Xoá nháp',
+        destructive: true,
+    });
+
+    if (confirmed) {
         router.delete(destroyDraft(draft.id).url);
     }
 }

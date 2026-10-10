@@ -13,6 +13,7 @@ import {
     renew as renewRoute,
     sold,
 } from '@/routes/listings';
+import { confirm } from '@/composables/useConfirm';
 import { edit as editDraft } from '@/routes/listings/drafts';
 import { AuctionStatus } from '@/types';
 import type { DashboardCard, Seller } from '@/types';
@@ -84,13 +85,24 @@ const active = ref<Tab>('selling');
 const listings = computed(() => props[active.value]);
 const activeTab = computed(() => tabs.find((tab) => tab.key === active.value)!);
 
-function cancel(listing: DashboardCard) {
-    const question =
+async function cancel(listing: DashboardCard) {
+    const confirmed = await confirm(
         listing.sale_type === 'fixed'
-            ? `Gỡ tin “${listing.title}”?`
-            : `Huỷ phiên đấu giá “${listing.title}”?`;
+            ? {
+                  title: 'Gỡ tin này khỏi sàn?',
+                  description: `“${listing.title}” sẽ không còn hiển thị với người mua.`,
+                  confirmLabel: 'Gỡ tin',
+                  destructive: true,
+              }
+            : {
+                  title: 'Huỷ phiên đấu giá này?',
+                  description: `Phiên “${listing.title}” sẽ dừng ngay và không có người thắng. Không hoàn tác được.`,
+                  confirmLabel: 'Huỷ phiên',
+                  destructive: true,
+              },
+    );
 
-    if (window.confirm(question)) {
+    if (confirmed) {
         router.delete(destroy(listing.id).url, { preserveScroll: true });
     }
 }
@@ -99,8 +111,14 @@ function renew(listing: DashboardCard) {
     router.post(renewRoute(listing.id).url, {}, { preserveScroll: true });
 }
 
-function markSold(listing: DashboardCard) {
-    if (window.confirm(`Đánh dấu “${listing.title}” là đã bán?`)) {
+async function markSold(listing: DashboardCard) {
+    const confirmed = await confirm({
+        title: 'Đánh dấu tin này là đã bán?',
+        description: `“${listing.title}” chuyển sang trạng thái đã bán và không còn nhận liên hệ từ người mua.`,
+        confirmLabel: 'Đánh dấu đã bán',
+    });
+
+    if (confirmed) {
         router.post(sold(listing.id).url, {}, { preserveScroll: true });
     }
 }

@@ -89,6 +89,8 @@ export type Contact = {
     email: string;
     phone: string | null;
     address: string | null;
+    /** Where the winner wants the item delivered; only the seller gets it. */
+    shipping: { name: string; phone: string; address: string } | null;
 };
 
 export type ReviewItem = {

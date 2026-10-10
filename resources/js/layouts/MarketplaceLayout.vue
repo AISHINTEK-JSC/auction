@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ConfirmDialog from '@/components/marketplace/ConfirmDialog.vue';
 import SiteFooter from '@/components/marketplace/SiteFooter.vue';
 import SiteHeader from '@/components/marketplace/SiteHeader.vue';
 import { Toaster } from '@/components/ui/sonner';
@@ -19,5 +20,6 @@ defineProps<{
         </main>
         <SiteFooter />
         <Toaster />
+        <ConfirmDialog />
     </div>
 </template>

@@ -27,7 +27,8 @@ const site = usePage().props.name;
             <li>
                 <strong>Thông tin tài khoản:</strong> họ tên, email, mật khẩu
                 (chỉ lưu dạng đã mã hoá một chiều), và những gì bạn tự bổ sung
-                như số điện thoại, địa chỉ, giới tính, ảnh đại diện.
+                như số điện thoại, địa chỉ, giới tính, ngày sinh, ảnh đại diện
+                và địa chỉ nhận hàng.
             </li>
             <li>
                 <strong>Nội dung bạn đăng:</strong> tin đăng, hình ảnh, bình
@@ -71,9 +72,10 @@ const site = usePage().props.name;
             <li>
                 <strong>Thông tin liên hệ</strong> (email, số điện thoại, địa
                 chỉ): sau khi phiên đấu giá kết thúc, chỉ người bán và người
-                thắng nhìn thấy của nhau. Với tin giá cố định đang bán, thành
-                viên đã đăng nhập và xác thực email xem được thông tin liên hệ
-                của người bán.
+                thắng nhìn thấy của nhau; người bán thấy thêm địa chỉ nhận hàng
+                của người thắng. Với tin giá cố định đang bán, thành viên đã
+                đăng nhập và xác thực email xem được thông tin liên hệ của người
+                bán.
             </li>
             <li>
                 <strong>Ban quản trị</strong> xem được dữ liệu cần thiết để kiểm

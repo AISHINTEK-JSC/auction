@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, ImageOff, X, ZoomIn } from '@lucide/vue';
-import { ref } from 'vue';
+import { ChevronLeft, ChevronRight, Expand, ImageOff, X } from '@lucide/vue';
+import { nextTick, ref, watch } from 'vue';
 import {
     Dialog,
     DialogClose,
@@ -10,8 +10,14 @@ import {
 } from '@/components/ui/dialog';
 
 /**
- * Product photos as a slider: swipe or use the arrows, pick from the
- * thumbnails, and click a photo to see it nearly full screen.
+ * Product photos: a strip of thumbnails beside one large photo. Swipe or use
+ * the arrows to move on, pick from the strip, and click the photo (or the
+ * expand button) to see it nearly full screen.
+ *
+ * On a phone the strip lies under the photo and scrolls sideways.
+ *
+ * Slots: `badge` sits over the photo's top-left corner, `actions` in its
+ * top-right corner, after the expand button.
  */
 const props = defineProps<{
     /** `url` is the full picture; `thumb` a small version for the strip. */
@@ -20,8 +26,13 @@ const props = defineProps<{
 }>();
 
 const track = ref<HTMLElement>();
+const strip = ref<HTMLElement>();
 const active = ref(0);
 const zoomed = ref(false);
+
+function reducedMotion(): boolean {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 function goTo(index: number, smooth = true) {
     const count = props.images.length;
@@ -32,13 +43,9 @@ function goTo(index: number, smooth = true) {
 
     active.value = (index + count) % count;
 
-    const reduceMotion = window.matchMedia(
-        '(prefers-reduced-motion: reduce)',
-    ).matches;
-
     track.value?.scrollTo({
         left: active.value * track.value.clientWidth,
-        behavior: smooth && !reduceMotion ? 'smooth' : 'auto',
+        behavior: smooth && !reducedMotion() ? 'smooth' : 'auto',
     });
 }
 
@@ -51,6 +58,25 @@ function onScroll() {
     }
 }
 
+// Keep the current thumbnail in sight. The strip is scrolled by hand:
+// scrollIntoView would move the whole page as well.
+watch(active, async (index) => {
+    await nextTick();
+
+    const list = strip.value;
+    const thumb = list?.children[index] as HTMLElement | undefined;
+
+    if (!list || !thumb) {
+        return;
+    }
+
+    list.scrollTo({
+        top: thumb.offsetTop - (list.clientHeight - thumb.offsetHeight) / 2,
+        left: thumb.offsetLeft - (list.clientWidth - thumb.offsetWidth) / 2,
+        behavior: reducedMotion() ? 'auto' : 'smooth',
+    });
+});
+
 // In the enlarged view there is no scrolling track, so swipes are read by hand.
 let touchStartX = 0;
 
@@ -62,102 +88,137 @@ function onTouchEnd(event: TouchEvent) {
     }
 }
 
-const arrowClass =
-    'absolute top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 focus-visible:ring-[3px] focus-visible:ring-white/60 focus-visible:outline-none';
+// Round white buttons that sit on the photo itself.
+const overlayButton =
+    'flex items-center justify-center rounded-full bg-white text-neutral-900 shadow-md ring-1 ring-black/5 transition hover:bg-neutral-100 focus-visible:ring-[3px] focus-visible:ring-neutral-900/40 focus-visible:outline-none';
+const arrowClass = `${overlayButton} absolute top-1/2 size-10 -translate-y-1/2 sm:size-11`;
+const zoomArrowClass =
+    'absolute top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 focus-visible:ring-[3px] focus-visible:ring-white/60 focus-visible:outline-none';
 </script>
 
 <template>
-    <section class="space-y-3">
+    <section>
         <div
             v-if="!images.length"
-            class="flex aspect-[4/3] items-center justify-center rounded-lg border bg-background"
+            class="flex aspect-[4/3] items-center justify-center rounded-2xl bg-muted"
         >
             <ImageOff class="size-10 text-muted-foreground" />
         </div>
 
         <div
             v-else
-            class="group relative overflow-hidden rounded-lg border bg-background"
-            role="group"
-            aria-roledescription="carousel"
-            aria-label="Hình ảnh sản phẩm"
+            class="flex flex-col-reverse gap-2 rounded-2xl bg-muted p-2 sm:flex-row sm:gap-3 sm:p-3"
         >
+            <!-- Thumbnails: a column beside the photo, as tall as the photo;
+                 a row under it on a phone. -->
             <div
-                ref="track"
-                class="flex aspect-[4/3] snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
-                tabindex="0"
-                @scroll.passive="onScroll"
-                @keydown.left.prevent="goTo(active - 1)"
-                @keydown.right.prevent="goTo(active + 1)"
+                v-if="images.length > 1"
+                class="relative shrink-0 sm:w-20 lg:w-24"
             >
-                <button
-                    v-for="(image, index) in images"
-                    :key="image.url"
-                    type="button"
-                    class="size-full shrink-0 cursor-zoom-in snap-center"
-                    :aria-label="`Phóng to ảnh ${index + 1} trên ${images.length}`"
-                    @click="zoomed = true"
+                <div
+                    ref="strip"
+                    class="relative flex [scrollbar-width:none] gap-2 overflow-auto sm:absolute sm:inset-0 sm:flex-col [&::-webkit-scrollbar]:hidden"
                 >
-                    <img
-                        :src="image.url"
-                        :alt="`${alt} (ảnh ${index + 1})`"
-                        :loading="index === 0 ? 'eager' : 'lazy'"
-                        class="size-full object-contain"
-                    />
-                </button>
+                    <button
+                        v-for="(image, index) in images"
+                        :key="image.url"
+                        type="button"
+                        class="aspect-square w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-background p-1 transition-colors sm:w-full"
+                        :class="
+                            index === active
+                                ? 'border-foreground'
+                                : 'border-transparent hover:border-foreground/30'
+                        "
+                        :aria-label="`Xem ảnh ${index + 1}`"
+                        :aria-current="index === active"
+                        @click="goTo(index)"
+                    >
+                        <img
+                            :src="image.thumb"
+                            alt=""
+                            loading="lazy"
+                            class="size-full rounded-lg object-cover"
+                        />
+                    </button>
+                </div>
             </div>
 
-            <template v-if="images.length > 1">
-                <button
-                    type="button"
-                    :class="[arrowClass, 'left-2']"
-                    aria-label="Ảnh trước"
-                    @click="goTo(active - 1)"
-                >
-                    <ChevronLeft class="size-5" />
-                </button>
-                <button
-                    type="button"
-                    :class="[arrowClass, 'right-2']"
-                    aria-label="Ảnh sau"
-                    @click="goTo(active + 1)"
-                >
-                    <ChevronRight class="size-5" />
-                </button>
-            </template>
-
-            <span
-                class="pointer-events-none absolute right-2 bottom-2 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs text-white tabular-nums"
+            <div
+                class="relative min-w-0 flex-1 overflow-hidden rounded-xl bg-background"
+                role="group"
+                aria-roledescription="carousel"
+                aria-label="Hình ảnh sản phẩm"
             >
-                <ZoomIn class="size-3.5" />
-                {{ active + 1 }} / {{ images.length }}
-            </span>
-        </div>
+                <div
+                    ref="track"
+                    class="flex aspect-[4/3] snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                    tabindex="0"
+                    @scroll.passive="onScroll"
+                    @keydown.left.prevent="goTo(active - 1)"
+                    @keydown.right.prevent="goTo(active + 1)"
+                >
+                    <button
+                        v-for="(image, index) in images"
+                        :key="image.url"
+                        type="button"
+                        class="size-full shrink-0 cursor-zoom-in snap-center"
+                        :aria-label="`Phóng to ảnh ${index + 1} trên ${images.length}`"
+                        @click="zoomed = true"
+                    >
+                        <img
+                            :src="image.url"
+                            :alt="`${alt} (ảnh ${index + 1})`"
+                            :loading="index === 0 ? 'eager' : 'lazy'"
+                            class="size-full object-contain"
+                        />
+                    </button>
+                </div>
 
-        <div v-if="images.length > 1" class="flex flex-wrap gap-2">
-            <button
-                v-for="(image, index) in images"
-                :key="image.url"
-                type="button"
-                class="size-16 overflow-hidden rounded-md border-2"
-                :class="
-                    index === active ? 'border-primary' : 'border-transparent'
-                "
-                :aria-label="`Xem ảnh ${index + 1}`"
-                :aria-current="index === active"
-                @click="goTo(index)"
-            >
-                <img
-                    :src="image.thumb"
-                    alt=""
-                    loading="lazy"
-                    class="size-full object-cover"
-                />
-            </button>
+                <div class="absolute top-3 left-3 flex flex-wrap gap-2">
+                    <slot name="badge" />
+                </div>
+
+                <div class="absolute top-3 right-3 flex items-center gap-2">
+                    <button
+                        type="button"
+                        :class="[overlayButton, 'size-10 sm:size-11']"
+                        aria-label="Phóng to ảnh"
+                        @click="zoomed = true"
+                    >
+                        <Expand class="size-5" />
+                    </button>
+                    <slot name="actions" />
+                </div>
+
+                <template v-if="images.length > 1">
+                    <button
+                        type="button"
+                        :class="[arrowClass, 'left-3']"
+                        aria-label="Ảnh trước"
+                        @click="goTo(active - 1)"
+                    >
+                        <ChevronLeft class="size-5" />
+                    </button>
+                    <button
+                        type="button"
+                        :class="[arrowClass, 'right-3']"
+                        aria-label="Ảnh sau"
+                        @click="goTo(active + 1)"
+                    >
+                        <ChevronRight class="size-5" />
+                    </button>
+
+                    <span
+                        class="pointer-events-none absolute right-3 bottom-3 rounded-full bg-black/55 px-2.5 py-1 text-xs text-white tabular-nums"
+                    >
+                        {{ active + 1 }} / {{ images.length }}
+                    </span>
+                </template>
+            </div>
         </div>
 
         <!-- Enlarged view -->
-        <Dialog v-model:open="zoomed">
+        <Dialog v-if="images.length" v-model:open="zoomed">
             <DialogContent
                 :show-close-button="false"
                 class="flex h-[94dvh] w-[96vw] max-w-[96vw] items-center justify-center gap-0 border-0 bg-black/95 p-0 sm:max-w-[96vw]"
@@ -181,7 +242,7 @@ const arrowClass =
                 <template v-if="images.length > 1">
                     <button
                         type="button"
-                        :class="[arrowClass, 'left-3 size-11']"
+                        :class="[zoomArrowClass, 'left-3']"
                         aria-label="Ảnh trước"
                         @click="goTo(active - 1, false)"
                     >
@@ -189,7 +250,7 @@ const arrowClass =
                     </button>
                     <button
                         type="button"
-                        :class="[arrowClass, 'right-3 size-11']"
+                        :class="[zoomArrowClass, 'right-3']"
                         aria-label="Ảnh sau"
                         @click="goTo(active + 1, false)"
                     >
