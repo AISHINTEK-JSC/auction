@@ -6,6 +6,7 @@ use App\Enums\Gender;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Services\PhoneVerification;
 use App\Support\ImageOptimizer;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
@@ -23,12 +24,14 @@ class ProfileController extends Controller
     /**
      * Show the user's profile settings page.
      */
-    public function edit(Request $request): Response
+    public function edit(Request $request, PhoneVerification $phoneVerification): Response
     {
         $shipping = $request->user()->shippingAddress;
 
         return Inertia::render('settings/Profile', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+            // A code was texted and can still be typed in: show the code field.
+            'phoneCodePending' => $phoneVerification->pending($request->user()),
             'status' => $request->session()->get('status'),
             'genders' => Gender::options(),
             'shippingAddress' => $shipping === null ? null : [

@@ -28,7 +28,9 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property string|null $google_id
  * @property string|null $phone
+ * @property Carbon|null $phone_verified_at
  * @property string|null $address
  * @property Gender|null $gender
  * @property Carbon|null $birthday
@@ -50,7 +52,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'password', 'phone', 'address', 'gender', 'birthday', 'avatar_path'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'google_id', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 #[Appends(['avatar'])]
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail, PasskeyUser
 {
@@ -66,6 +68,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'role' => UserRole::class,
@@ -108,6 +111,15 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     public function isBlocked(): bool
     {
         return $this->blocked_at !== null;
+    }
+
+    /**
+     * The member proved the number on their profile is theirs, by typing back
+     * the code texted to it. Needed to bid and to post listings.
+     */
+    public function hasVerifiedPhone(): bool
+    {
+        return $this->phone !== null && $this->phone_verified_at !== null;
     }
 
     /**
@@ -161,6 +173,14 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Pas
     {
         static::creating(function (self $user): void {
             $user->member_code ??= self::newMemberCode();
+        });
+
+        // A new number has to be confirmed again, whoever changed it (the
+        // member on their profile or an admin in the panel).
+        static::updating(function (self $user): void {
+            if ($user->isDirty('phone') && ! $user->isDirty('phone_verified_at')) {
+                $user->phone_verified_at = null;
+            }
         });
     }
 

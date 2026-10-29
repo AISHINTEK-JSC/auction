@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiveawayController;
@@ -33,6 +34,14 @@ Route::get('privacy', [SiteController::class, 'privacy'])->name('legal.privacy')
 Route::get('sitemap.xml', [SiteController::class, 'sitemap'])->withoutMiddleware('web')->name('sitemap');
 Route::get('robots.txt', [SiteController::class, 'robots'])->withoutMiddleware('web')->name('robots');
 
+// Sign in (or sign up) with Google: off when no Google client is configured.
+Route::middleware('guest')->group(function () {
+    Route::get('auth/google', [GoogleController::class, 'redirect'])->name('google.redirect');
+    Route::get('auth/google/callback', [GoogleController::class, 'callback'])
+        ->middleware('throttle:10,1')
+        ->name('google.callback');
+});
+
 Route::get('blocked', [UnlockRequestController::class, 'create'])->name('blocked');
 Route::post('unlock-requests', [UnlockRequestController::class, 'store'])
     ->middleware('throttle:5,1')
@@ -45,25 +54,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::get('notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
 
-    Route::get('listings/create', [ListingController::class, 'create'])->name('listings.create');
-    Route::post('listings', [ListingController::class, 'store'])->name('listings.store');
+    // Posting a listing and bidding need a phone number confirmed by SMS.
+    Route::middleware('phone.verified')->group(function () {
+        Route::get('listings/create', [ListingController::class, 'create'])->name('listings.create');
+        Route::post('listings', [ListingController::class, 'store'])->name('listings.store');
+        Route::post('listings/drafts', [ListingDraftController::class, 'store'])->name('listings.drafts.store');
+        Route::post('listings/{listing}/publish', [ListingDraftController::class, 'publish'])->name('listings.drafts.publish');
+        Route::get('listings/{listing}/relist', [ListingController::class, 'relist'])->name('listings.relist');
 
-    Route::post('listings/drafts', [ListingDraftController::class, 'store'])->name('listings.drafts.store');
+        Route::post('listings/{listing}/bids', [ListingBidController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('listings.bids.store');
+    });
+
     Route::get('listings/{listing}/draft', [ListingDraftController::class, 'edit'])->name('listings.drafts.edit');
     Route::put('listings/{listing}/draft', [ListingDraftController::class, 'update'])->name('listings.drafts.update');
     Route::delete('listings/{listing}/draft', [ListingDraftController::class, 'destroy'])->name('listings.drafts.destroy');
-    Route::post('listings/{listing}/publish', [ListingDraftController::class, 'publish'])->name('listings.drafts.publish');
 
     Route::get('listings/{listing}/edit', [ListingController::class, 'edit'])->name('listings.edit');
     Route::put('listings/{listing}', [ListingController::class, 'update'])->name('listings.update');
     Route::delete('listings/{listing}', [ListingController::class, 'destroy'])->name('listings.destroy');
-    Route::get('listings/{listing}/relist', [ListingController::class, 'relist'])->name('listings.relist');
     Route::post('listings/{listing}/sold', [ListingController::class, 'sold'])->name('listings.sold');
     Route::post('listings/{listing}/renew', [ListingController::class, 'renew'])->name('listings.renew');
 
-    Route::post('listings/{listing}/bids', [ListingBidController::class, 'store'])
-        ->middleware('throttle:30,1')
-        ->name('listings.bids.store');
     Route::delete('listings/{listing}/bids', [ListingBidController::class, 'destroy'])
         ->middleware('throttle:30,1')
         ->name('listings.bids.destroy');

@@ -7,6 +7,7 @@ use App\Models\AdminAction;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AuctionEngine\AuctionEngineClient;
+use App\Services\Sms\SmsSender;
 use App\Support\IntegrationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -199,6 +200,85 @@ class IntegrationSettingsTest extends TestCase
         Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
             ->callAction('testMail', ['to' => 'admin@chotgia.test'])
             ->assertNotified('Không gửi được email');
+    }
+
+    public function test_an_admin_switches_email_to_amazon_ses(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('smtp', ['mailer' => 'ses', 'ses_key' => 'AKIAEXAMPLE12345678', 'ses_secret' => 'ses-secret-abc', 'ses_region' => 'ap-southeast-1', 'from_address' => 'no-reply@chotgia.test', 'reset' => false])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame('ses', config('mail.default'));
+        $this->assertSame('AKIAEXAMPLE12345678', config('services.ses.key'));
+        $this->assertSame('ses-secret-abc', config('services.ses.secret'));
+        $this->assertSame('ap-southeast-1', config('services.ses.region'));
+        $this->assertStringNotContainsString('ses-secret-abc', DB::table('settings')->pluck('value')->implode(' '));
+
+        $this->actingAs($admin)->get('/admin/settings')
+            ->assertSee('Amazon SES (ap-southeast-1)')
+            ->assertSee('AKIA…5678')
+            ->assertDontSee('ses-secret-abc');
+
+        $log = AdminAction::query()->where('action', 'settings.updated')->sole()->summary;
+        $this->assertStringContainsString('Secret key SES: đã đổi', $log);
+        $this->assertStringNotContainsString('ses-secret-abc', $log);
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('smtp', ['ses_region' => 'không phải vùng', 'reset' => false])
+            ->assertHasActionErrors(['ses_region']);
+
+        // "Dùng lại .env" drops the SES keys too.
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('smtp', ['reset' => true])
+            ->assertHasNoActionErrors();
+        $this->assertSame([], IntegrationSettings::stored(IntegrationSettings::SES));
+        $this->assertSame('array', config('mail.default'));
+    }
+
+    public function test_an_admin_sets_up_amazon_sns_and_sends_a_test_text(): void
+    {
+        $admin = User::factory()->admin()->create(['phone' => '0912345678']);
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('sms', ['driver' => 'sns', 'key' => 'AKIASNSEXAMPLE1234', 'secret' => 'sns-secret-xyz', 'region' => 'ap-southeast-1', 'sender_id' => 'CHOTGIA', 'reset' => false])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame('sns', config('services.sms.driver'));
+        $this->assertSame('sns-secret-xyz', config('services.sns.secret'));
+
+        $this->actingAs($admin)->get('/admin/settings')
+            ->assertSee('Amazon SNS (ap-southeast-1)')
+            ->assertSee('CHOTGIA')
+            ->assertDontSee('sns-secret-xyz');
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('sms', ['sender_id' => 'quá dài và có dấu', 'reset' => false])
+            ->assertHasActionErrors(['sender_id']);
+
+        $sent = [];
+        $this->app->instance(SmsSender::class, new class($sent) implements SmsSender
+        {
+            /** @param  list<string>  $sent */
+            public function __construct(private array &$sent) {}
+
+            public function send(string $phone, string $message): void
+            {
+                $this->sent[] = $phone;
+            }
+        });
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('testSms', ['to' => '0912345678'])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Đã gửi SMS thử tới +84912345678');
+        $this->assertSame(['+84912345678'], $sent);
+
+        Livewire::actingAs($admin)->test(MarketplaceSettingsPage::class)
+            ->callAction('sms', ['reset' => true])
+            ->assertHasNoActionErrors();
+        $this->assertSame('log', config('services.sms.driver'));
     }
 
     public function test_moderators_cannot_reach_the_connection_settings(): void

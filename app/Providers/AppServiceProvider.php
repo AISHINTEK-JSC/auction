@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Sms\LogSmsSender;
+use App\Services\Sms\SmsSender;
+use App\Services\Sms\SnsSmsSender;
 use App\Support\EmailTemplate;
 use App\Support\IntegrationSettings;
 use Carbon\CarbonImmutable;
@@ -13,6 +16,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,7 +25,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Resolved on each use: an admin can switch the driver at runtime (IntegrationSettings).
+        $this->app->bind(SmsSender::class, fn () => match (config('services.sms.driver')) {
+            'sns' => SnsSmsSender::fromConfig((array) config('services.sns')),
+            'log' => new LogSmsSender,
+            default => throw new InvalidArgumentException('Unknown SMS driver ['.config('services.sms.driver').'].'),
+        });
     }
 
     /**

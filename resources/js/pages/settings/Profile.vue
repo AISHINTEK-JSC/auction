@@ -6,6 +6,7 @@ import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileCo
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import PhoneVerification from '@/components/PhoneVerification.vue';
 import CitySelect from '@/components/marketplace/CitySelect.vue';
 import SearchableSelect from '@/components/marketplace/SearchableSelect.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,6 +30,7 @@ defineOptions({
 
 const props = defineProps<{
     mustVerifyEmail: boolean;
+    phoneCodePending: boolean;
     status?: string | null;
     genders: { value: string; label: string }[];
     shippingAddress: {
@@ -150,6 +152,9 @@ function uploadAvatar(event: Event) {
                     autocomplete="tel"
                     placeholder="09xxx"
                 />
+                <p class="text-xs text-muted-foreground">
+                    Đổi số điện thoại thì cần xác thực lại số mới.
+                </p>
                 <InputError class="mt-2" :message="errors.phone" />
             </div>
 
@@ -290,6 +295,12 @@ function uploadAvatar(event: Event) {
             </div>
         </Form>
     </div>
+
+    <PhoneVerification
+        :phone="user.phone"
+        :verified="!!user.phone_verified_at"
+        :code-pending="phoneCodePending"
+    />
 
     <DeleteUser />
 </template>

@@ -4,6 +4,8 @@ export type User = {
     email: string;
     avatar?: string | null;
     phone: string | null;
+    /** Set once the number was confirmed by an SMS code; needed to bid and to post. */
+    phone_verified_at: string | null;
     address: string | null;
     gender: 'male' | 'female' | 'other' | null;
     /** YYYY-MM-DD. */

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import GoogleSignIn from '@/components/GoogleSignIn.vue';
 import InputError from '@/components/InputError.vue';
 import CaptchaWidget from '@/components/marketplace/CaptchaWidget.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
@@ -15,6 +16,7 @@ import { store } from '@/routes/register';
 
 defineProps<{
     passwordRules: string;
+    canSignInWithGoogle?: boolean;
 }>();
 
 const captcha = ref<InstanceType<typeof CaptchaWidget> | null>(null);
@@ -111,6 +113,8 @@ defineOptions({
                 <Spinner v-if="processing" />
                 Tạo tài khoản
             </Button>
+
+            <GoogleSignIn v-if="canSignInWithGoogle" />
 
             <p class="text-center text-xs text-muted-foreground">
                 Khi tạo tài khoản, bạn đồng ý với

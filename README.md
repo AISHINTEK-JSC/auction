@@ -183,15 +183,24 @@ resources/js/components/marketplace/   SiteHeader, AuctionCard, BidPanel, Commen
 
 Người dùng bị khoá sẽ bị đăng xuất ở request kế tiếp và được chuyển tới `/blocked` để gửi yêu cầu mở khoá.
 
-### Cấu hình SMTP và auction engine trong trang quản trị
+### Cấu hình email, SMS và auction engine trong trang quản trị
 
-Trang **Cài đặt** của admin có hai nút "Email (SMTP)" và "Auction engine". Những gì lưu ở đó nằm trong bảng `settings` và được đặt đè lên cấu hình lúc ứng dụng khởi động (`App\Support\IntegrationSettings::apply()`, gọi từ `AppServiceProvider`), nên phần còn lại của mã vẫn đọc `config('mail…')` và `config('services.auction_engine…')` như cũ.
+Trang **Cài đặt** của admin có ba nút "Email (SMTP / SES)", "SMS (SNS)" và "Auction engine". Những gì lưu ở đó nằm trong bảng `settings` và được đặt đè lên cấu hình lúc ứng dụng khởi động (`App\Support\IntegrationSettings::apply()`, gọi từ `AppServiceProvider`), nên phần còn lại của mã vẫn đọc `config('mail…')`, `config('services.ses…')`, `config('services.sns…')` và `config('services.auction_engine…')` như cũ.
 
 - Ô để trống thì dùng giá trị trong `.env`; công tắc "dùng lại .env" xoá toàn bộ phần đã lưu của nhóm đó.
-- Mật khẩu SMTP, API token và push key được mã hoá bằng `APP_KEY` trước khi lưu, không bao giờ gửi lại ra trình duyệt (để trống ô là giữ nguyên) và không xuất hiện trong nhật ký thao tác. Đổi `APP_KEY` thì các giá trị này coi như chưa đặt và phải nhập lại.
-- Khi có máy chủ SMTP lưu ở đây, app gửi thư qua SMTP dù `MAIL_MAILER` trong `.env` là gì.
-- "Kiểm tra kết nối" có hai mục: **Gửi email thử** (gửi một thư qua cấu hình đang dùng, báo lỗi của máy chủ nếu thất bại) và **Kiểm tra engine** (gọi engine lấy danh sách phiên để xác nhận địa chỉ và token).
+- Mật khẩu SMTP, secret key của SES / SNS, API token và push key được mã hoá bằng `APP_KEY` trước khi lưu, không bao giờ gửi lại ra trình duyệt (để trống ô là giữ nguyên) và không xuất hiện trong nhật ký thao tác. Đổi `APP_KEY` thì các giá trị này coi như chưa đặt và phải nhập lại.
+- "Gửi email qua" chọn SMTP hoặc Amazon SES. Để trống mà có máy chủ SMTP lưu ở đây thì app gửi thư qua SMTP dù `MAIL_MAILER` trong `.env` là gì.
+- Amazon SES / SNS: để trống access key và secret key thì AWS SDK dùng IAM role của máy chủ. Với SES, địa chỉ người gửi phải được xác minh trong SES và tài khoản phải ra khỏi sandbox. Với SNS, tài khoản phải ra khỏi SMS sandbox và có hạn mức chi tiêu SMS đủ dùng; muốn hiện tên thương hiệu thì đăng ký Sender ID với nhà mạng Việt Nam qua AWS.
+- "Kiểm tra kết nối" có ba mục: **Gửi email thử** (gửi một thư qua cấu hình đang dùng, báo lỗi của máy chủ nếu thất bại), **Gửi SMS thử** và **Kiểm tra engine** (gọi engine lấy danh sách phiên để xác nhận địa chỉ và token).
 - Tiến trình `queue` và `scheduler` trong Docker khởi động lại ứng dụng cho mỗi lượt chạy nên nhận cấu hình mới ngay. Nếu chạy `queue:work` thường trực thì cần `php artisan queue:restart` sau khi đổi.
+
+### Xác thực số điện thoại (SMS)
+
+Đặt giá và đăng tin (`listings.create`, `listings.store`, nháp, đăng lại, đặt giá) cần số điện thoại đã xác thực, qua middleware `phone.verified` (`App\Http\Middleware\EnsurePhoneIsVerified`). Thành viên chưa xác thực bị chuyển về trang Hồ sơ, nơi họ bấm "Gửi mã xác thực" rồi nhập mã 6 chữ số nhận qua SMS (`App\Services\PhoneVerification`).
+
+- SMS gửi qua `App\Services\Sms\SmsSender`: driver `log` (mặc định, chỉ ghi mã vào `storage/logs`, dùng khi phát triển) hoặc `sns` (Amazon SNS). Chọn bằng `SMS_DRIVER` trong `.env` hoặc ở trang quản trị → Cài đặt → "SMS (SNS)".
+- Mã hết hạn sau 5 phút, sai 5 lần thì phải gửi mã mới. Mỗi thành viên và mỗi số điện thoại nhận tối đa 5 mã trong 24 giờ, cách nhau ít nhất 60 giây. Chỉ lưu bản băm của mã, trong cache.
+- Một số điện thoại chỉ xác thực được cho một tài khoản. Đổi số (ở Hồ sơ hoặc admin sửa) thì phải xác thực lại.
 
 ### Mẫu email
 

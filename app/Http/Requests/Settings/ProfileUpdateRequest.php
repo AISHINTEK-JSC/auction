@@ -4,6 +4,7 @@ namespace App\Http\Requests\Settings;
 
 use App\Concerns\ProfileValidationRules;
 use App\Enums\Gender;
+use App\Support\PhoneNumber;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -11,9 +12,6 @@ use Illuminate\Validation\Rule;
 class ProfileUpdateRequest extends FormRequest
 {
     use ProfileValidationRules;
-
-    /** A Vietnamese phone number, with or without the country code. */
-    private const PHONE = 'regex:/^(0|\+84)\d{9,10}$/';
 
     /**
      * Get the validation rules that apply to the request.
@@ -24,14 +22,14 @@ class ProfileUpdateRequest extends FormRequest
     {
         return [
             ...$this->profileRules($this->user()->id),
-            'phone' => ['nullable', 'string', self::PHONE],
+            'phone' => ['nullable', 'string', PhoneNumber::RULE],
             'address' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', Rule::enum(Gender::class)],
             'birthday' => ['nullable', 'date_format:Y-m-d', 'before:today', 'after_or_equal:1900-01-01'],
 
             // The shipping address is all or nothing: half an address cannot be delivered to.
             'shipping_name' => ['nullable', 'string', 'max:255', 'required_with:shipping_phone,shipping_city_id,shipping_address'],
-            'shipping_phone' => ['nullable', 'string', self::PHONE, 'required_with:shipping_name,shipping_city_id,shipping_address'],
+            'shipping_phone' => ['nullable', 'string', PhoneNumber::RULE, 'required_with:shipping_name,shipping_city_id,shipping_address'],
             'shipping_city_id' => ['nullable', 'integer', Rule::exists('cities', 'id'), 'required_with:shipping_name,shipping_phone,shipping_address'],
             'shipping_address' => ['nullable', 'string', 'max:255', 'required_with:shipping_name,shipping_phone,shipping_city_id'],
         ];

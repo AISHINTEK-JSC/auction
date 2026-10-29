@@ -10,6 +10,7 @@ import { useAuthUser } from '@/composables/useAuthUser';
 import { formatDateTime, formatVnd } from '@/lib/format';
 import { login } from '@/routes';
 import { store } from '@/routes/listings/bids';
+import { edit as editProfile } from '@/routes/profile';
 import { AuctionType, BidType } from '@/types';
 import type { AuctionState, ListingDetail } from '@/types';
 
@@ -108,6 +109,20 @@ function submit(type: number) {
         class="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground"
     >
         Đây là phiên đấu giá của bạn.
+    </div>
+
+    <!-- The server refuses bids until the member's phone number is confirmed. -->
+    <div
+        v-else-if="!user.phone_verified_at"
+        class="rounded-lg border bg-muted/40 p-4 text-sm"
+        role="status"
+    >
+        <Link
+            :href="editProfile()"
+            class="font-medium underline underline-offset-4"
+            >Xác thực số điện thoại</Link
+        >
+        để tham gia đấu giá.
     </div>
 
     <form v-else class="space-y-3" @submit.prevent="submit(BidType.Limit)">

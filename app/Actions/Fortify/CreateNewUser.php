@@ -29,7 +29,7 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
             ...PassesCaptcha::rules(),
         ], PassesCaptcha::messages())->after(function (ValidatorContract $validator) use ($input): void {
-            if ($this->registrationIsBlocked((string) ($input['email'] ?? ''))) {
+            if (self::registrationIsBlocked((string) ($input['email'] ?? ''))) {
                 $validator->errors()->add('email', 'Không thể đăng ký bằng email hoặc địa chỉ mạng này.');
             }
         })->validate();
@@ -42,9 +42,10 @@ class CreateNewUser implements CreatesNewUsers
     }
 
     /**
-     * Admins can block registration by IP address or by email domain.
+     * Admins can block registration by IP address or by email domain. Also
+     * checked for accounts made by signing in with Google.
      */
-    private function registrationIsBlocked(string $email): bool
+    public static function registrationIsBlocked(string $email): bool
     {
         $domain = Str::lower(Str::after($email, '@'));
 

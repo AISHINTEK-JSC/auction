@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import GoogleSignIn from '@/components/GoogleSignIn.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -23,6 +24,7 @@ defineOptions({
 defineProps<{
     status?: string;
     canResetPassword: boolean;
+    canSignInWithGoogle?: boolean;
 }>();
 </script>
 
@@ -100,6 +102,8 @@ defineProps<{
                 <Spinner v-if="processing" />
                 Đăng nhập
             </Button>
+
+            <GoogleSignIn v-if="canSignInWithGoogle" />
         </div>
 
         <div class="text-center text-sm text-muted-foreground">

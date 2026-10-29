@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuctionWebhookController;
+use App\Http\Middleware\EnsurePhoneIsVerified;
 use App\Http\Middleware\EnsureUserIsNotBlocked;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -27,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+
+        $middleware->alias(['phone.verified' => EnsurePhoneIsVerified::class]);
 
         $middleware->web(append: [
             HandleAppearance::class,
